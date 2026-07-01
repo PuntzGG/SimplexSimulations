@@ -2,10 +2,9 @@
 #include <SDL3/SDL_main.h>
 #include <GL/glew.h>
 #include <iostream>
-#include <string>
-#include <cstddef>
-#include "ShaderProgram.h"
 
+#include "ShaderProgram.h"
+#include "SimplexMesh.h"
 
 const char* vertexShaderSource = R"(
 #version 330 core
@@ -35,14 +34,6 @@ void main()
 )";
 
 
-struct Vertex
-{
-	float x;
-	float y;
-	float r;
-	float g;
-	float b;
-};
 
 
 int main(int argc, char* argv[])
@@ -94,32 +85,17 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	SimplexMesh simplexMesh;
+	if (!simplexMesh.Create()) {
+		std::cerr << "Failed to create simplex mesh.\n";
+		shaderProgram.Destroy();
+		SDL_GL_DestroyContext(context);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
+	}
+
 	std::cout << "Window created successfully.\n";
-
-	Vertex simplexVertices[] = {
-		{  0.0f,   0.75f,  0.7f, 0.0f, 0.99f },
-		{ -0.75f, -0.55f,  0.0f, 0.99f, 0.99f },
-		{  0.75f, -0.55f,  0.0f, 0.0f, 0.7f }
-	};
-
-	GLuint vao = 0;
-	GLuint vbo = 0;
-
-	glGenVertexArrays(1, &vao);
-	glGenBuffers(1, &vbo);
-
-	glBindVertexArray(vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(simplexVertices), simplexVertices, GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, x)));
-	glEnableVertexAttribArray(0);
-
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, r)));
-	glEnableVertexAttribArray(1);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
 
 	glViewport(0, 0, 800, 600);
 
@@ -139,14 +115,12 @@ int main(int argc, char* argv[])
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		shaderProgram.Use();
-		glBindVertexArray(vao);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+		simplexMesh.Draw();
 
 		SDL_GL_SwapWindow(window);
 	}
 
-	glDeleteVertexArrays(1, &vao);
-	glDeleteBuffers(1, &vbo);
+	simplexMesh.Destroy();
 	shaderProgram.Destroy();
 	SDL_GL_DestroyContext(context);
 	SDL_DestroyWindow(window);

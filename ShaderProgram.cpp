@@ -3,9 +3,10 @@
 #include <iostream>
 #include <string>
 
-
+//Only this .cpp file can use CompileShader.
 namespace
 {
+	// Compiles one shader stage and returns its OpenGL handle, or 0 on failure.
 	GLuint CompileShader(GLenum shaderType, const char* source)
 	{
 		GLuint shader = glCreateShader(shaderType);
@@ -40,6 +41,7 @@ ShaderProgram::~ShaderProgram()
 
 bool ShaderProgram::Create(const char* vertexSource, const char* fragmentSource)
 {
+	// Replaces any previously owned program before creating a new one.
 	Destroy();
 
 	GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexSource);
@@ -53,6 +55,7 @@ bool ShaderProgram::Create(const char* vertexSource, const char* fragmentSource)
 		return false;
 	}
 
+	// Links the compiled shader stages into one executable GPU program.
 	GLuint program = glCreateProgram();
 	glAttachShader(program, vertexShader);
 	glAttachShader(program, fragmentShader);
@@ -78,6 +81,7 @@ bool ShaderProgram::Create(const char* vertexSource, const char* fragmentSource)
 		return false;
 	}
 
+	// After linking, the program keeps the compiled code; shader objects can go.
 	glDetachShader(program, vertexShader);
 	glDetachShader(program, fragmentShader);
 	glDeleteShader(vertexShader);
