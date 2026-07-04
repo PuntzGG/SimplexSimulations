@@ -5,6 +5,7 @@
 
 #include "ShaderProgram.h"
 #include "SimplexMesh.h"
+#include "SimplexMapper.h"
 
 const char* vertexShaderSource = R"(
 #version 330 core

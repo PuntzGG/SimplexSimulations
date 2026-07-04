@@ -25,7 +25,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ShaderProgram.h" />
+    <ClInclude Include="SimplexMapper.h" />
     <ClInclude Include="SimplexMesh.h" />
+    <ClInclude Include="SimplexState.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

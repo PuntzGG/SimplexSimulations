@@ -32,5 +32,11 @@
     <ClInclude Include="SimplexMesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SimplexState.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SimplexMapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
