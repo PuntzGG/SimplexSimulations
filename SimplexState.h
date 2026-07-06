@@ -52,7 +52,7 @@ public:
 	[[nodiscard]] double Y() const { return y_; }
 	[[nodiscard]] double Z() const { return z_; }
 
-	[[nodiscard]] bool isValid(double epsilon = kDefaultEpsilon) const
+	[[nodiscard]] bool IsValid(double epsilon = kDefaultEpsilon) const
 	{
 		return IsValidValues(x_, y_, z_, epsilon);
 	}

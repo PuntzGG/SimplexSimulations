@@ -20,14 +20,22 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="PointMesh.cpp" />
+    <ClCompile Include="SdlOpenGLWindow.cpp" />
+    <ClCompile Include="SdlOpenGLWindow.h" />
+    <ClCompile Include="SdlSystem.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="SimplexMesh.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="PointMesh.h" />
+    <ClInclude Include="SdlSystem.h" />
     <ClInclude Include="ShaderProgram.h" />
+    <ClInclude Include="ShaderSources.h" />
     <ClInclude Include="SimplexMapper.h" />
     <ClInclude Include="SimplexMesh.h" />
     <ClInclude Include="SimplexState.h" />
+    <ClInclude Include="Vec2f.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

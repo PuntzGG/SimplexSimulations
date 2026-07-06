@@ -1,12 +1,7 @@
 #pragma once
 
 #include "SimplexState.h"
-
-struct Vec2f final
-{
-	float x = 0.0f;
-	float y = 0.0f;
-};
+#include "Vec2f.h"
 
 class SimplexMapper final
 {

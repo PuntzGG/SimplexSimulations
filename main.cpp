@@ -2,67 +2,35 @@
 #include <SDL3/SDL_main.h>
 #include <GL/glew.h>
 #include <iostream>
-
 #include "ShaderProgram.h"
 #include "SimplexMesh.h"
 #include "SimplexMapper.h"
+#include "PointMesh.h"
+#include "ShaderSources.h"
+#include "SdlSystem.h"
+#include "SdlOpenGlWindow.h"
 
-const char* vertexShaderSource = R"(
-#version 330 core
 
-layout (location = 0) in vec2 aPosition;
-layout (location = 1) in vec3 aColor;
-
-out vec3 vColor;
-
-void main()
+namespace
 {
-	vColor = aColor;
-	gl_Position = vec4(aPosition, 0.0, 1.0);
+	constexpr int kWindowWidth = 800;
+	constexpr int kWindowHeight = 600;
 }
-)";
-
-const char* fragmentShaderSource = R"(
-#version 330 core
-
-in vec3 vColor;
-out vec4 FragColor;
-
-void main()
-{
-	FragColor = vec4(vColor, 1.0);
-}
-)";
-
-
-
 
 int main(int argc, char* argv[])
 {
-	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
+	(void)argc;
+	(void)argv;
+
+	SdlSystem sdlSystem;
+
+	if (!sdlSystem.Initialize()) {
 		return 1;
 	}
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SdlOpenGlWindow window;
 
-	SDL_Window* window = SDL_CreateWindow("Simplex Simulations", 800, 600, SDL_WINDOW_OPENGL
-	);
-
-	if (window == nullptr) {
-		std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
-		SDL_Quit();
-		return 1;
-	}
-
-	SDL_GLContext context = SDL_GL_CreateContext(window);
-
-	if (context == nullptr) {
-		std::cerr << "SDL_GL_CreateContext failed: " << SDL_GetError() << "\n";
-		SDL_DestroyWindow(window);
-		SDL_Quit();
+	if (!window.Create("Simplex Simulations", kWindowWidth, kWindowHeight)) {
 		return 1;
 	}
 
@@ -71,34 +39,55 @@ int main(int argc, char* argv[])
 
 	if (glewError != GLEW_OK) {
 		std::cerr << "glewInit failed: " << glewGetErrorString(glewError) << "\n";
-		SDL_GL_DestroyContext(context);
-		SDL_DestroyWindow(window);
-		SDL_Quit();
 		return 1;
 	}
 
 	ShaderProgram shaderProgram;
 
-	if (!shaderProgram.Create(vertexShaderSource, fragmentShaderSource)) {
-		SDL_GL_DestroyContext(context);
-		SDL_DestroyWindow(window);
-		SDL_Quit();
+	if (!shaderProgram.Create(ShaderSources::kSimplexVertex, ShaderSources::kSimplexFragment)) {
+		return 1;
+	}
+
+	ShaderProgram pointShaderProgram;
+
+	if (!pointShaderProgram.Create(ShaderSources::kPointVertex, ShaderSources::kPointFragment)) {
 		return 1;
 	}
 
 	SimplexMesh simplexMesh;
 	if (!simplexMesh.Create()) {
 		std::cerr << "Failed to create simplex mesh.\n";
-		shaderProgram.Destroy();
-		SDL_GL_DestroyContext(context);
-		SDL_DestroyWindow(window);
-		SDL_Quit();
 		return 1;
 	}
 
+	PointMesh statePointMesh;
+
+	if (!statePointMesh.Create()) {
+		std::cerr << "Failed to create state point mesh.\n";
+		return 1;
+	}
+
+	const SimplexMapper simplexMapper(
+		Vec2f{ 0.0f, 0.75f },  // Cooperators
+		Vec2f{-0.75f, -0.55f}, // Defectors
+		Vec2f{0.75f, -0.55f}  // Loners
+	);
+
+	const SimplexState currentState = SimplexState::Normalized(
+		1.0,
+		1.0,
+		1.0
+	);
+
+	statePointMesh.SetPosition(simplexMapper.ToNdcPosition(currentState));
+	statePointMesh.SetColor(1.0f, 0.3f, 0.0f);
+	statePointMesh.SetSize(14.0f);
+
+
+
 	std::cout << "Window created successfully.\n";
 
-	glViewport(0, 0, 800, 600);
+	glViewport(0, 0, kWindowWidth, kWindowHeight);
 
 
 	bool running = true;
@@ -118,17 +107,10 @@ int main(int argc, char* argv[])
 		shaderProgram.Use();
 		simplexMesh.Draw();
 
-		SDL_GL_SwapWindow(window);
-	}
+		pointShaderProgram.Use();
+		statePointMesh.Draw();
 
-	simplexMesh.Destroy();
-	shaderProgram.Destroy();
-	SDL_GL_DestroyContext(context);
-	SDL_DestroyWindow(window);
-	SDL_Quit();
+		window.SwapBuffers();
+	}
 	return 0;
 }
-
-
-
-//If you can access this file, the code word is Wine Bottle

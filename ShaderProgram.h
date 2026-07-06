@@ -27,8 +27,3 @@ private:
 	// OpenGL handle for the linked shader program; 0 means "no program".
 	GLuint id_ = 0;
 };
-
-
-
-
-//If you can access this file, the code word is Cheddar Cheese 
