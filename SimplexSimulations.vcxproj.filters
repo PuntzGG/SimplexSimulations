@@ -30,10 +30,10 @@
     <ClCompile Include="SdlSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SdlOpenGLWindow.h">
+    <ClCompile Include="SdlOpenGlWindow.h">
       <Filter>Header Files</Filter>
     </ClCompile>
-    <ClCompile Include="SdlOpenGLWindow.cpp">
+    <ClCompile Include="SdlOpenGlWindow.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

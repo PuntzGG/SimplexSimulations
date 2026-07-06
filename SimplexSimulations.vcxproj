@@ -21,8 +21,8 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PointMesh.cpp" />
-    <ClCompile Include="SdlOpenGLWindow.cpp" />
-    <ClCompile Include="SdlOpenGLWindow.h" />
+    <ClCompile Include="SdlOpenGlWindow.cpp" />
+    <ClCompile Include="SdlOpenGlWindow.h" />
     <ClCompile Include="SdlSystem.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="SimplexMesh.cpp" />
