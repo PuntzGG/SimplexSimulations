@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="LogitDynamics.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PointMesh.cpp" />
     <ClCompile Include="SdlOpenGlWindow.cpp" />
@@ -26,15 +27,24 @@
     <ClCompile Include="SdlSystem.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="SimplexMesh.cpp" />
+    <ClCompile Include="SimplexTrajectoryIntegrator.cpp" />
+    <ClCompile Include="TrajectoryMesh.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="LogitDynamics.h" />
+    <ClInclude Include="OpggParameters.h" />
     <ClInclude Include="PointMesh.h" />
     <ClInclude Include="SdlSystem.h" />
     <ClInclude Include="ShaderProgram.h" />
     <ClInclude Include="ShaderSources.h" />
+    <ClInclude Include="SimplexDerivative.h" />
+    <ClInclude Include="SimplexDynamicModel.h" />
     <ClInclude Include="SimplexMapper.h" />
     <ClInclude Include="SimplexMesh.h" />
     <ClInclude Include="SimplexState.h" />
+    <ClInclude Include="SimplexTrajectoryIntegrator.h" />
+    <ClInclude Include="TrajectoryMesh.h" />
+    <ClInclude Include="TrajectorySettings.h" />
     <ClInclude Include="Vec2f.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

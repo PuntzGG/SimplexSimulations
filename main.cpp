@@ -1,7 +1,9 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <GL/glew.h>
+
 #include <iostream>
+#include <vector>
 #include "ShaderProgram.h"
 #include "SimplexMesh.h"
 #include "SimplexMapper.h"
@@ -9,6 +11,11 @@
 #include "ShaderSources.h"
 #include "SdlSystem.h"
 #include "SdlOpenGlWindow.h"
+#include "LogitDynamics.h"
+#include "SimplexTrajectoryIntegrator.h"
+#include "TrajectorySettings.h"
+
+#include "TrajectoryMesh.h"
 
 
 namespace
@@ -23,7 +30,23 @@ namespace
 			1.0f - (2.0f * windowY / static_cast<float>(kWindowHeight))
 		};
 	}
+
+	[[nodiscard]] std::vector<Vec2f> BuildTrajectoryPositions(
+		const std::vector<SimplexState>& states,
+		const SimplexMapper& simplexMapper
+	)
+	{
+		std::vector<Vec2f> positions;
+		positions.reserve(states.size());
+
+		for (const SimplexState& state : states) {
+			positions.push_back(simplexMapper.ToNdcPosition(state));
+		}
+
+		return positions;
+	}
 }
+
 
 int main(int argc, char* argv[])
 {
@@ -75,22 +98,91 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	TrajectoryMesh trajectoryMesh;
+
+	if (!trajectoryMesh.Create()) {
+		std::cerr << "Failed to create trajectory mesh.\n";
+		return 1;
+	}
+
 	const SimplexMapper simplexMapper(
 		Vec2f{ 0.0f, 0.75f },  // Cooperators
 		Vec2f{-0.75f, -0.55f}, // Defectors
 		Vec2f{0.75f, -0.55f}  // Loners
 	);
 
-	auto setDisplayedState = [&](const SimplexState& state)
+	LogitDynamics logitDynamics;
+	SimplexTrajectoryIntegrator trajectoryIntegrator;
+
+	const TrajectorySettings trajectorySettings{
+		10.0,   // totalTime
+		0.02,   // timeStep
+		10000   // maxSteps
+	};
+
+	auto rebuildTrajectoryForState = [&](const SimplexState& state) -> bool
 		{
-			statePointMesh.SetPosition(simplexMapper.ToNdcPosition(state));
+			const auto trajectory = trajectoryIntegrator.Integrate(
+				logitDynamics,
+				state,
+				trajectorySettings
+			);
+
+			if (!trajectory.has_value()) {
+				std::cerr << "Failed to integrate logit trajectory.\n";
+				return false;
+			}
+
+			const std::vector<Vec2f> trajectoryPositions = BuildTrajectoryPositions(
+				*trajectory,
+				simplexMapper
+			);
+
+			if (!trajectoryMesh.SetPoints(trajectoryPositions, 0.05f, 0.05f, 0.05f)) {
+				std::cerr << "Failed to upload trajectory mesh.\n";
+				return false;
+			}
+
+			const SimplexState& finalState = trajectory->back();
+
+			std::cout
+				<< "Generated logit trajectory with "
+				<< trajectory->size()
+				<< " states. Final state: "
+				<< "x = " << finalState.X() << ", "
+				<< "y = " << finalState.Y() << ", "
+				<< "z = " << finalState.Z() << "\n";
+
+			return true;
 		};
 
-	setDisplayedState(SimplexState::Normalized(1.0, 1.0, 1.0));
+	auto setDisplayedState = [&](const SimplexState& state) -> bool
+		{
+			statePointMesh.SetPosition(simplexMapper.ToNdcPosition(state));
+			return rebuildTrajectoryForState(state);
+		};
+
+	const SimplexState initialState = SimplexState::Normalized(1.0, 1.0, 1.0);
+
+	if (!setDisplayedState(initialState)) {
+		return 1;
+	}
+
 	statePointMesh.SetColor(1.0f, 0.3f, 0.0f);
 	statePointMesh.SetSize(14.0f);
 
+	const auto initialDerivative = logitDynamics.Evaluate(initialState);
 
+	if (!initialDerivative.has_value()) {
+		std::cerr << "Failed to evaluate logit dynamic.\n";
+		return 1;
+	}
+
+	std::cout
+		<< "Initial logit derivative: "
+		<< "dx = " << initialDerivative->dx << ", "
+		<< "dy = " << initialDerivative->dy << ", "
+		<< "dz = " << initialDerivative->dz << "\n";
 
 	std::cout << "Window created successfully.\n";
 
@@ -109,7 +201,11 @@ int main(int argc, char* argv[])
 				return false;
 			}
 
-			setDisplayedState(*clickedState);
+			if (!setDisplayedState(*clickedState)) {
+				running = false;
+				return false;
+			}
+
 			return true;
 		};
 
@@ -118,8 +214,8 @@ int main(int argc, char* argv[])
 			const Vec2f draggedNdcPosition = WindowToNdcPosition(windowX, windowY);
 			const auto draggedState = simplexMapper.FromNdcPositionClamped(draggedNdcPosition);
 
-			if (draggedState.has_value()) {
-				setDisplayedState(*draggedState);
+			if (draggedState.has_value() && !setDisplayedState(*draggedState)) {
+				running = false;
 			}
 		};
 
@@ -134,19 +230,27 @@ int main(int argc, char* argv[])
 			if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
 				switch (event.key.scancode) {
 				case SDL_SCANCODE_1:
-					setDisplayedState(SimplexState::Normalized(1.0, 0.0, 0.0));
+					if (!setDisplayedState(SimplexState::Normalized(1.0, 0.0, 0.0))) {
+						running = false;
+					}
 					break;
 
 				case SDL_SCANCODE_2:
-					setDisplayedState(SimplexState::Normalized(0.0, 1.0, 0.0));
+					if (!setDisplayedState(SimplexState::Normalized(0.0, 1.0, 0.0))) {
+						running = false;
+					}
 					break;
 
 				case SDL_SCANCODE_3:
-					setDisplayedState(SimplexState::Normalized(0.0, 0.0, 1.0));
+					if (!setDisplayedState(SimplexState::Normalized(0.0, 0.0, 1.0))) {
+						running = false;
+					}
 					break;
 
 				case SDL_SCANCODE_C:
-					setDisplayedState(SimplexState::Normalized(1.0, 1.0, 1.0));
+					if (!setDisplayedState(SimplexState::Normalized(1.0, 1.0, 1.0))) {
+						running = false;
+					}
 					break;
 
 				default:
@@ -178,6 +282,7 @@ int main(int argc, char* argv[])
 
 		shaderProgram.Use();
 		simplexMesh.Draw();
+		trajectoryMesh.Draw();
 
 		pointShaderProgram.Use();
 		statePointMesh.Draw();
