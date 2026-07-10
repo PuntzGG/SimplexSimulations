@@ -11,17 +11,16 @@
 #include "ShaderSources.h"
 #include "SdlSystem.h"
 #include "SdlOpenGlWindow.h"
-#include "LogitDynamics.h"
-#include "SimplexTrajectoryIntegrator.h"
-#include "TrajectorySettings.h"
-
+#include "SimulationSession.h"
 #include "TrajectoryMesh.h"
+#include "ImGuiLayer.h"
+#include "imgui.h"
 
 
 namespace
 {
-	constexpr int kWindowWidth = 800;
-	constexpr int kWindowHeight = 600;
+	constexpr int kWindowWidth = 1200;
+	constexpr int kWindowHeight = 1100;
 
 	[[nodiscard]] Vec2f WindowToNdcPosition(float windowX, float windowY)
 	{
@@ -73,6 +72,16 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	ImGuiLayer imguiLayer;
+
+	if (!imguiLayer.Initialize(
+		window.NativeWindow(),
+		window.GlContext(),
+		"#version 330 core"
+	)) {
+		return 1;
+	}
+
 	ShaderProgram shaderProgram;
 
 	if (!shaderProgram.Create(ShaderSources::kSimplexVertex, ShaderSources::kSimplexFragment)) {
@@ -111,78 +120,62 @@ int main(int argc, char* argv[])
 		Vec2f{0.75f, -0.55f}  // Loners
 	);
 
-	LogitDynamics logitDynamics;
-	SimplexTrajectoryIntegrator trajectoryIntegrator;
+	SimulationSession simulation;
 
-	const TrajectorySettings trajectorySettings{
-		10.0,   // totalTime
-		0.02,   // timeStep
-		10000   // maxSteps
-	};
+	if (!simulation.Initialize()) {
+		std::cerr << "Failed to initialize the simulation session.\n";
+		return 1;
+	}
 
-	auto rebuildTrajectoryForState = [&](const SimplexState& state) -> bool
+	auto refreshSimulationVisualization = [&]() -> bool
 		{
-			const auto trajectory = trajectoryIntegrator.Integrate(
-				logitDynamics,
-				state,
-				trajectorySettings
-			);
+			const std::vector<SimplexState>& trajectory = simulation.Trajectory();
 
-			if (!trajectory.has_value()) {
-				std::cerr << "Failed to integrate logit trajectory.\n";
+			if (trajectory.empty()) {
+				std::cerr << "Simulation session returned an empty trajectory.\n";
 				return false;
 			}
 
 			const std::vector<Vec2f> trajectoryPositions = BuildTrajectoryPositions(
-				*trajectory,
+				trajectory,
 				simplexMapper
 			);
 
-			if (!trajectoryMesh.SetPoints(trajectoryPositions, 0.05f, 0.05f, 0.05f)) {
+			if (!trajectoryMesh.SetPoints(
+				trajectoryPositions,
+				0.05f,
+				0.05f,
+				0.05f
+			)) {
 				std::cerr << "Failed to upload trajectory mesh.\n";
 				return false;
 			}
 
-			const SimplexState& finalState = trajectory->back();
+			statePointMesh.SetPosition(
+				simplexMapper.ToNdcPosition(simulation.CurrentState())
+			);
 
-			std::cout
-				<< "Generated logit trajectory with "
-				<< trajectory->size()
-				<< " states. Final state: "
-				<< "x = " << finalState.X() << ", "
-				<< "y = " << finalState.Y() << ", "
-				<< "z = " << finalState.Z() << "\n";
+			const SimplexState& finalState = trajectory.back();
 
 			return true;
 		};
 
 	auto setDisplayedState = [&](const SimplexState& state) -> bool
 		{
-			statePointMesh.SetPosition(simplexMapper.ToNdcPosition(state));
-			return rebuildTrajectoryForState(state);
+			if (!simulation.SetCurrentState(state)) {
+				std::cerr << "Failed to update the simulation state.\n";
+				return false;
+			}
+
+			return refreshSimulationVisualization();
 		};
-
-	const SimplexState initialState = SimplexState::Normalized(1.0, 1.0, 1.0);
-
-	if (!setDisplayedState(initialState)) {
-		return 1;
-	}
 
 	statePointMesh.SetColor(1.0f, 0.3f, 0.0f);
 	statePointMesh.SetSize(14.0f);
 
-	const auto initialDerivative = logitDynamics.Evaluate(initialState);
-
-	if (!initialDerivative.has_value()) {
-		std::cerr << "Failed to evaluate logit dynamic.\n";
+	if (!refreshSimulationVisualization()) {
 		return 1;
 	}
-
-	std::cout
-		<< "Initial logit derivative: "
-		<< "dx = " << initialDerivative->dx << ", "
-		<< "dy = " << initialDerivative->dy << ", "
-		<< "dz = " << initialDerivative->dz << "\n";
 
 	std::cout << "Window created successfully.\n";
 
@@ -223,11 +216,16 @@ int main(int argc, char* argv[])
 		SDL_Event event;
 
 		while (SDL_PollEvent(&event)) {
+			imguiLayer.ProcessEvent(event);
 			if (event.type == SDL_EVENT_QUIT) {
 				running = false;
 			}
 
-			if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+			if (
+				event.type == SDL_EVENT_KEY_DOWN
+				&& !event.key.repeat
+				&& !imguiLayer.WantsKeyboardInput()
+				) {
 				switch (event.key.scancode) {
 				case SDL_SCANCODE_1:
 					if (!setDisplayedState(SimplexState::Normalized(1.0, 0.0, 0.0))) {
@@ -258,14 +256,22 @@ int main(int argc, char* argv[])
 				}
 			}
 
-			if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
+			if (
+				event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
+				&& event.button.button == SDL_BUTTON_LEFT
+				&& !imguiLayer.WantsMouseInput()
+				) {
 				draggingSimplexPoint = tryStartDraggingFromWindowPosition(
 					event.button.x,
 					event.button.y
 				);
 			}
 
-			if (event.type == SDL_EVENT_MOUSE_MOTION && draggingSimplexPoint) {
+			if (
+				event.type == SDL_EVENT_MOUSE_MOTION
+				&& draggingSimplexPoint
+				&& !imguiLayer.WantsMouseInput()
+				) {
 				setDisplayedStateFromWindowPositionClamped(
 					event.motion.x,
 					event.motion.y
@@ -277,6 +283,165 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		imguiLayer.BeginFrame();
+
+		ImGui::Begin("Simulation Controls");
+
+		ImGui::TextUnformatted("Logit dynamics");
+		ImGui::Separator();
+
+		constexpr int kMinimumGroupSize = 2;
+		constexpr int kMaximumGroupSize = 20;
+
+		constexpr double kMinimumMultiplicationFactor = 0.1;
+		constexpr double kMaximumMultiplicationFactor = 10.0;
+
+		constexpr double kMinimumLonerPayoffMultiplier = 0.0;
+		constexpr double kMaximumLonerPayoffMultiplier = 5.0;
+
+		constexpr double kMinimumContributionCost = 0.01;
+		constexpr double kMaximumContributionCost = 5.0;
+
+		constexpr double kMinimumPunishmentFraction = 0.0;
+		constexpr double kMaximumPunishmentFraction = 1.0;
+
+		constexpr double kMinimumLogitNoise = 0.001;
+		constexpr double kMaximumLogitNoise = 1.0;
+
+		OpggParameters candidateParameters = simulation.Parameters();
+		bool parametersChanged = false;
+
+		if (ImGui::SliderInt(
+			"Group size (n)",
+			&candidateParameters.groupSize,
+			kMinimumGroupSize,
+			kMaximumGroupSize
+		)) {
+			parametersChanged = true;
+		}
+
+		if (ImGui::SliderScalar(
+			"Multiplication factor (r)",
+			ImGuiDataType_Double,
+			&candidateParameters.multiplicationFactor,
+			&kMinimumMultiplicationFactor,
+			&kMaximumMultiplicationFactor,
+			"%.3f"
+		)) {
+			parametersChanged = true;
+		}
+
+		if (ImGui::SliderScalar(
+			"Loner payoff multiplier (sigma)",
+			ImGuiDataType_Double,
+			&candidateParameters.lonerPayoffMultiplier,
+			&kMinimumLonerPayoffMultiplier,
+			&kMaximumLonerPayoffMultiplier,
+			"%.3f"
+		)) {
+			parametersChanged = true;
+		}
+
+		if (ImGui::SliderScalar(
+			"Contribution cost (c)",
+			ImGuiDataType_Double,
+			&candidateParameters.contributionCost,
+			&kMinimumContributionCost,
+			&kMaximumContributionCost,
+			"%.3f"
+		)) {
+			parametersChanged = true;
+		}
+
+		if (ImGui::SliderScalar(
+			"Punishment fraction (v)",
+			ImGuiDataType_Double,
+			&candidateParameters.punishmentFraction,
+			&kMinimumPunishmentFraction,
+			&kMaximumPunishmentFraction,
+			"%.3f"
+		)) {
+			parametersChanged = true;
+		}
+
+		if (ImGui::SliderScalar(
+			"Logit noise (eta)",
+			ImGuiDataType_Double,
+			&candidateParameters.logitNoise,
+			&kMinimumLogitNoise,
+			&kMaximumLogitNoise,
+			"%.4f",
+			ImGuiSliderFlags_Logarithmic
+			| ImGuiSliderFlags_ClampOnInput
+		)) {
+			parametersChanged = true;
+		}
+
+		if (parametersChanged) {
+			if (!simulation.SetParameters(candidateParameters)) {
+				std::cerr << "Failed to update simulation parameters.\n";
+			}
+			else if (!refreshSimulationVisualization()) {
+				running = false;
+			}
+		}
+
+		ImGui::Separator();
+		ImGui::TextUnformatted("Lower eta: closer to best response.");
+		ImGui::TextUnformatted("Higher eta: more exploratory choices.");
+
+		ImGui::Separator();
+
+		if (ImGui::CollapsingHeader("Trajectory integration")) {
+			constexpr double kMinimumTrajectoryTime = 1.0;
+			constexpr double kMaximumTrajectoryTime = 20.0;
+
+			constexpr double kMinimumTimeStep = 0.005;
+			constexpr double kMaximumTimeStep = 0.1;
+
+			TrajectorySettings candidateSettings = simulation.Settings();
+			bool trajectorySettingsChanged = false;
+
+			if (ImGui::SliderScalar(
+				"Trajectory duration",
+				ImGuiDataType_Double,
+				&candidateSettings.totalTime,
+				&kMinimumTrajectoryTime,
+				&kMaximumTrajectoryTime,
+				"%.1f"
+			)) {
+				trajectorySettingsChanged = true;
+			}
+
+			if (ImGui::SliderScalar(
+				"RK4 time step",
+				ImGuiDataType_Double,
+				&candidateSettings.timeStep,
+				&kMinimumTimeStep,
+				&kMaximumTimeStep,
+				"%.3f",
+				ImGuiSliderFlags_Logarithmic
+				| ImGuiSliderFlags_ClampOnInput
+			)) {
+				trajectorySettingsChanged = true;
+			}
+
+			if (trajectorySettingsChanged) {
+				if (!simulation.SetTrajectorySettings(candidateSettings)) {
+					std::cerr << "Failed to update trajectory settings.\n";
+				}
+				else if (!refreshSimulationVisualization()) {
+					running = false;
+				}
+			}
+
+			ImGui::TextUnformatted(
+				"Smaller steps give a finer RK4 approximation."
+			);
+		}
+
+		ImGui::End();
+
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -286,6 +451,7 @@ int main(int argc, char* argv[])
 
 		pointShaderProgram.Use();
 		statePointMesh.Draw();
+		imguiLayer.Render();
 
 		window.SwapBuffers();
 	}

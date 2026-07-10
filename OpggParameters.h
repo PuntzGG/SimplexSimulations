@@ -8,7 +8,7 @@ struct OpggParameters final
     double multiplicationFactor = 3.0;   // r
     double lonerPayoffMultiplier = 1.0;  // sigma
     double contributionCost = 1.0;       // c
-    double punishmentFraction = 0.25;    // v in your Python source
+    double punishmentFraction = 0.25;    // v in the Python source by Jossias
     double logitNoise = 0.08;            // eta
 
     [[nodiscard]] bool IsComputable() const

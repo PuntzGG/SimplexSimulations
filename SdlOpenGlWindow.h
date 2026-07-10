@@ -13,6 +13,8 @@ public:
 
     [[nodiscard]] bool Create(const char* title, int width, int height);
     void SwapBuffers() const;
+    [[nodiscard]] SDL_Window* NativeWindow() const { return window_; }
+    [[nodiscard]] SDL_GLContext GlContext() const { return context_; }
     void Destroy();
 
 private:

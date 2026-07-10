@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ImGuiLayer.cpp" />
     <ClCompile Include="LogitDynamics.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PointMesh.cpp" />
@@ -26,11 +27,20 @@
     <ClCompile Include="SdlOpenGlWindow.h" />
     <ClCompile Include="SdlSystem.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
+    <ClCompile Include="SimplexEquilibriumFinder.cpp" />
     <ClCompile Include="SimplexMesh.cpp" />
     <ClCompile Include="SimplexTrajectoryIntegrator.cpp" />
+    <ClCompile Include="SimulationSession.cpp" />
+    <ClCompile Include="third_party\imgui\backends\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="third_party\imgui\backends\imgui_impl_sdl3.cpp" />
+    <ClCompile Include="third_party\imgui\imgui.cpp" />
+    <ClCompile Include="third_party\imgui\imgui_draw.cpp" />
+    <ClCompile Include="third_party\imgui\imgui_tables.cpp" />
+    <ClCompile Include="third_party\imgui\imgui_widgets.cpp" />
     <ClCompile Include="TrajectoryMesh.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ImGuiLayer.h" />
     <ClInclude Include="LogitDynamics.h" />
     <ClInclude Include="OpggParameters.h" />
     <ClInclude Include="PointMesh.h" />
@@ -39,10 +49,12 @@
     <ClInclude Include="ShaderSources.h" />
     <ClInclude Include="SimplexDerivative.h" />
     <ClInclude Include="SimplexDynamicModel.h" />
+    <ClInclude Include="SimplexEquilibriumFinder.h" />
     <ClInclude Include="SimplexMapper.h" />
     <ClInclude Include="SimplexMesh.h" />
     <ClInclude Include="SimplexState.h" />
     <ClInclude Include="SimplexTrajectoryIntegrator.h" />
+    <ClInclude Include="SimulationSession.h" />
     <ClInclude Include="TrajectoryMesh.h" />
     <ClInclude Include="TrajectorySettings.h" />
     <ClInclude Include="Vec2f.h" />
@@ -133,7 +145,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)deps\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)deps\include;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -151,7 +163,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)deps\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)deps\include;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
