@@ -111,6 +111,14 @@ SimulationSession::FindEquilibria(
     return equilibriumFinder_.Find(dynamics_, settings);
 }
 
+std::optional<LogitEquilibriumSweepResult>
+SimulationSession::GenerateEquilibriumSweep(
+    const LogitEquilibriumSweepSettings& settings
+) const
+{
+    return equilibriumSweep_.Generate(parameters_, settings);
+}
+
 bool SimulationSession::RebuildTrajectory()
 {
     const auto trajectory = trajectoryIntegrator_.Integrate(

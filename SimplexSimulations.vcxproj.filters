@@ -75,6 +75,12 @@
     <ClCompile Include="EquilibriumMesh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="LogitEquilibriumSweep.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="EquilibriumPathMesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ShaderProgram.h">
@@ -132,6 +138,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="EquilibriumMesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LogitEquilibriumSweep.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EquilibriumPathMesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

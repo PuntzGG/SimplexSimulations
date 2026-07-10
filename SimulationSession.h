@@ -3,6 +3,7 @@
 #include <vector>
 #include <optional>
 
+#include "LogitEquilibriumSweep.h"
 #include "SimplexEquilibriumFinder.h"
 #include "LogitDynamics.h"
 #include "OpggParameters.h"
@@ -30,6 +31,10 @@ public:
     [[nodiscard]] std::optional<std::vector<SimplexEquilibrium>> FindEquilibria(
         const SimplexEquilibriumSearchSettings& settings = {}
     ) const;
+    [[nodiscard]] std::optional<LogitEquilibriumSweepResult>
+        GenerateEquilibriumSweep(
+            const LogitEquilibriumSweepSettings& settings
+        ) const;
 
 private:
     [[nodiscard]] bool RebuildTrajectory();
@@ -38,6 +43,7 @@ private:
     OpggParameters parameters_;
     TrajectorySettings trajectorySettings_;
     SimplexEquilibriumFinder equilibriumFinder_;
+    LogitEquilibriumSweep equilibriumSweep_;
     LogitDynamics dynamics_;
     SimplexTrajectoryIntegrator trajectoryIntegrator_;
     std::vector<SimplexState> trajectory_;

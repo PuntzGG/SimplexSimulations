@@ -20,8 +20,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="EquilibriumMesh.cpp" />
+    <ClCompile Include="EquilibriumPathMesh.cpp" />
     <ClCompile Include="ImGuiLayer.cpp" />
     <ClCompile Include="LogitDynamics.cpp" />
+    <ClCompile Include="LogitEquilibriumSweep.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PointMesh.cpp" />
     <ClCompile Include="SdlOpenGlWindow.cpp" />
@@ -42,8 +44,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EquilibriumMesh.h" />
+    <ClInclude Include="EquilibriumPathMesh.h" />
     <ClInclude Include="ImGuiLayer.h" />
     <ClInclude Include="LogitDynamics.h" />
+    <ClInclude Include="LogitEquilibriumSweep.h" />
     <ClInclude Include="OpggParameters.h" />
     <ClInclude Include="PointMesh.h" />
     <ClInclude Include="SdlSystem.h" />

@@ -4,7 +4,11 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
+#include <optional>
+#include <utility>
 
+#include "EquilibriumPathMesh.h"
+#include "LogitEquilibriumSweep.h"
 #include "EquilibriumMesh.h"
 #include "SimplexEquilibriumFinder.h"
 #include "ShaderProgram.h"
@@ -46,6 +50,39 @@ namespace
 		}
 
 		return positions;
+	}
+
+	[[nodiscard]] bool IsEquilibriumSweepCompatible(
+		const LogitEquilibriumSweepResult& sweep,
+		const OpggParameters& parameters
+	)
+	{
+		const OpggParameters& baseline = sweep.baselineParameters;
+
+		switch (sweep.parameter) {
+		case LogitEquilibriumSweepParameter::LogitNoise:
+			return parameters.groupSize == baseline.groupSize
+				&& parameters.multiplicationFactor
+				== baseline.multiplicationFactor
+				&& parameters.lonerPayoffMultiplier
+				== baseline.lonerPayoffMultiplier
+				&& parameters.contributionCost
+				== baseline.contributionCost
+				&& parameters.punishmentFraction
+				== baseline.punishmentFraction;
+
+		case LogitEquilibriumSweepParameter::PunishmentFraction:
+			return parameters.groupSize == baseline.groupSize
+				&& parameters.multiplicationFactor
+				== baseline.multiplicationFactor
+				&& parameters.lonerPayoffMultiplier
+				== baseline.lonerPayoffMultiplier
+				&& parameters.contributionCost
+				== baseline.contributionCost
+				&& parameters.logitNoise == baseline.logitNoise;
+		}
+
+		return false;
 	}
 }
 
@@ -126,6 +163,13 @@ int main(int argc, char* argv[])
 
 	equilibriumMesh.SetSize(15.0f);
 
+	EquilibriumPathMesh equilibriumPathMesh;
+
+	if (!equilibriumPathMesh.Create()) {
+		std::cerr << "Failed to create equilibrium path mesh.\n";
+		return 1;
+	}
+
 	const SimplexMapper simplexMapper(
 		Vec2f{ 0.0f, 0.75f },  // Cooperators
 		Vec2f{-0.75f, -0.55f}, // Defectors
@@ -141,6 +185,14 @@ int main(int argc, char* argv[])
 
 	std::vector<SimplexEquilibrium> equilibria;
 	bool showEquilibria = false;
+
+	constexpr int kNoEquilibriumSweep = 0;
+	constexpr int kLogitNoiseSweep = 1;
+	constexpr int kPunishmentSweep = 2;
+
+	int selectedEquilibriumSweep = kNoEquilibriumSweep;
+
+	std::optional<LogitEquilibriumSweepResult> equilibriumSweepResult;
 
 	auto refreshSimulationVisualization = [&]() -> bool
 		{
@@ -221,6 +273,62 @@ int main(int argc, char* argv[])
 	if (!refreshSimulationVisualization()) {
 		return 1;
 	}
+
+	auto rebuildEquilibriumSweepVisualization =
+		[&](const LogitEquilibriumSweepSettings& settings) -> bool
+		{
+			const auto generatedSweep =
+				simulation.GenerateEquilibriumSweep(settings);
+
+			if (!generatedSweep.has_value()) {
+				std::cerr << "Failed to generate equilibrium branches.\n";
+				return false;
+			}
+
+			std::vector<std::vector<Vec2f>> branchPaths;
+			branchPaths.reserve(generatedSweep->branches.size());
+
+			for (const LogitEquilibriumBranch& branch
+				: generatedSweep->branches) {
+				std::vector<Vec2f> path;
+				path.reserve(branch.samples.size());
+
+				for (const LogitEquilibriumSweepSample& sample
+					: branch.samples) {
+					path.push_back(
+						simplexMapper.ToNdcPosition(
+							sample.equilibrium.state
+						)
+					);
+				}
+
+				branchPaths.push_back(std::move(path));
+			}
+
+			float red = 0.1f;
+			float green = 0.75f;
+			float blue = 0.95f;
+
+			if (settings.parameter
+				== LogitEquilibriumSweepParameter::PunishmentFraction) {
+				red = 0.75f;
+				green = 0.25f;
+				blue = 0.95f;
+			}
+
+			if (!equilibriumPathMesh.SetPaths(
+				branchPaths,
+				red,
+				green,
+				blue
+			)) {
+				std::cerr << "Failed to upload equilibrium branches.\n";
+				return false;
+			}
+
+			equilibriumSweepResult = *generatedSweep;
+			return true;
+		};
 
 	std::cout << "Window created successfully.\n";
 
@@ -423,14 +531,28 @@ int main(int argc, char* argv[])
 		}
 
 		if (parametersChanged) {
+			const bool keepEquilibriumSweep =
+				!equilibriumSweepResult.has_value()
+				|| IsEquilibriumSweepCompatible(
+					*equilibriumSweepResult,
+					candidateParameters
+				);
+
 			if (!simulation.SetParameters(candidateParameters)) {
 				std::cerr << "Failed to update simulation parameters.\n";
 			}
-			else if (
-				!refreshSimulationVisualization()
-				|| (showEquilibria && !rebuildEquilibriumVisualization())
-				) {
-				running = false;
+			else {
+				if (!keepEquilibriumSweep) {
+					equilibriumSweepResult.reset();
+				}
+
+				if (
+					!refreshSimulationVisualization()
+					|| (showEquilibria
+						&& !rebuildEquilibriumVisualization())
+					) {
+					running = false;
+				}
 			}
 		}
 
@@ -473,6 +595,122 @@ int main(int argc, char* argv[])
 				ImGui::Text(
 					"Largest residual: %.2e",
 					largestResidual
+				);
+			}
+		}
+
+		ImGui::Separator();
+		ImGui::TextUnformatted("Equilibrium branches");
+
+		const int previousEquilibriumSweep = selectedEquilibriumSweep;
+
+		ImGui::RadioButton(
+			"Sweep off",
+			&selectedEquilibriumSweep,
+			kNoEquilibriumSweep
+		);
+
+		ImGui::SameLine();
+
+		ImGui::RadioButton(
+			"Sweep eta",
+			&selectedEquilibriumSweep,
+			kLogitNoiseSweep
+		);
+
+		ImGui::SameLine();
+
+		ImGui::RadioButton(
+			"Sweep punishment",
+			&selectedEquilibriumSweep,
+			kPunishmentSweep
+		);
+
+		if (selectedEquilibriumSweep != previousEquilibriumSweep) {
+			equilibriumSweepResult.reset();
+		}
+
+		if (selectedEquilibriumSweep != kNoEquilibriumSweep) {
+			LogitEquilibriumSweepSettings sweepSettings;
+
+			if (selectedEquilibriumSweep == kLogitNoiseSweep) {
+				sweepSettings.parameter =
+					LogitEquilibriumSweepParameter::LogitNoise;
+
+				sweepSettings.minimumParameter = kMinimumLogitNoise;
+				sweepSettings.maximumParameter = kMaximumLogitNoise;
+			}
+			else {
+				sweepSettings.parameter =
+					LogitEquilibriumSweepParameter::PunishmentFraction;
+
+				sweepSettings.minimumParameter = kMinimumPunishmentFraction;
+				sweepSettings.maximumParameter = kMaximumPunishmentFraction;
+			}
+
+			const char* generateLabel =
+				selectedEquilibriumSweep == kLogitNoiseSweep
+				? "Generate eta branches"
+				: "Generate punishment branches";
+
+			if (ImGui::Button(generateLabel)) {
+				equilibriumSweepResult.reset();
+
+				if (!rebuildEquilibriumSweepVisualization(sweepSettings)) {
+					equilibriumSweepResult.reset();
+				}
+			}
+
+			ImGui::Text(
+				"Range: %.4g to %.4g",
+				sweepSettings.minimumParameter,
+				sweepSettings.maximumParameter
+			);
+
+			ImGui::TextUnformatted(
+				"Other game parameters are held fixed."
+			);
+
+			if (equilibriumSweepResult.has_value()) {
+				int visibleBranchCount = 0;
+				int verifiedSampleCount = 0;
+				double largestResidual = 0.0;
+
+				for (const LogitEquilibriumBranch& branch
+					: equilibriumSweepResult->branches) {
+					if (branch.samples.size() >= 2) {
+						++visibleBranchCount;
+					}
+
+					for (const LogitEquilibriumSweepSample& sample
+						: branch.samples) {
+						++verifiedSampleCount;
+
+						largestResidual = std::max(
+							largestResidual,
+							sample.equilibrium.residual
+						);
+					}
+				}
+
+				ImGui::Text(
+					"Visible branch lines: %d",
+					visibleBranchCount
+				);
+
+				ImGui::Text(
+					"Verified samples: %d",
+					verifiedSampleCount
+				);
+
+				ImGui::Text(
+					"Largest residual: %.2e",
+					largestResidual
+				);
+			}
+			else {
+				ImGui::TextUnformatted(
+					"Generate branches for the current game parameters."
 				);
 			}
 		}
@@ -533,6 +771,13 @@ int main(int argc, char* argv[])
 		shaderProgram.Use();
 		simplexMesh.Draw();
 		trajectoryMesh.Draw();
+
+		if (
+			selectedEquilibriumSweep != kNoEquilibriumSweep
+			&& equilibriumSweepResult.has_value()
+			) {
+			equilibriumPathMesh.Draw();
+		}
 
 		pointShaderProgram.Use();
 
