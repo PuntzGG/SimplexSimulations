@@ -66,6 +66,18 @@ void SimplexMesh::Draw() const
 	glDrawArrays(GL_TRIANGLES, 0, vertexCount_);
 }
 
+void SimplexMesh::DrawOutline() const
+{
+	if (vao_ == 0 || vertexCount_ == 0) {
+		return;
+	}
+
+	glLineWidth(2.0f);
+
+	glBindVertexArray(vao_);
+	glDrawArrays(GL_LINE_LOOP, 0, vertexCount_);
+}
+
 void SimplexMesh::Destroy()
 {
 	if (vao_ != 0) {

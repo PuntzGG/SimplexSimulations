@@ -29,6 +29,17 @@ void main()
 }
 )";
 
+    inline constexpr const char* kSimplexOutlineFragment = R"(
+#version 330 core
+
+out vec4 FragColor;
+
+void main()
+{
+    FragColor = vec4(0.08, 0.08, 0.08, 1.0);
+}
+)";
+
     inline constexpr const char* kPointVertex = R"(
 #version 330 core
 

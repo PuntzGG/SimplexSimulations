@@ -18,6 +18,7 @@ public:
 	//[[nodiscard]] means the caller should not ignore the returned bool.
 	[[nodiscard]] bool Create();
 	void Draw() const;
+	void DrawOutline() const;
 	void Destroy();
 
 private:
