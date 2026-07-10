@@ -72,6 +72,9 @@
     <ClCompile Include="SimplexEquilibriumFinder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="EquilibriumMesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ShaderProgram.h">
@@ -126,6 +129,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SimplexEquilibriumFinder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EquilibriumMesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="EquilibriumMesh.cpp" />
     <ClCompile Include="ImGuiLayer.cpp" />
     <ClCompile Include="LogitDynamics.cpp" />
     <ClCompile Include="main.cpp" />
@@ -40,6 +41,7 @@
     <ClCompile Include="TrajectoryMesh.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="EquilibriumMesh.h" />
     <ClInclude Include="ImGuiLayer.h" />
     <ClInclude Include="LogitDynamics.h" />
     <ClInclude Include="OpggParameters.h" />

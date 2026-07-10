@@ -103,6 +103,14 @@ const std::vector<SimplexState>& SimulationSession::Trajectory() const
     return trajectory_;
 }
 
+std::optional<std::vector<SimplexEquilibrium>>
+SimulationSession::FindEquilibria(
+    const SimplexEquilibriumSearchSettings& settings
+) const
+{
+    return equilibriumFinder_.Find(dynamics_, settings);
+}
+
 bool SimulationSession::RebuildTrajectory()
 {
     const auto trajectory = trajectoryIntegrator_.Integrate(

@@ -1,9 +1,12 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <GL/glew.h>
-
+#include <algorithm>
 #include <iostream>
 #include <vector>
+
+#include "EquilibriumMesh.h"
+#include "SimplexEquilibriumFinder.h"
 #include "ShaderProgram.h"
 #include "SimplexMesh.h"
 #include "SimplexMapper.h"
@@ -114,6 +117,15 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	EquilibriumMesh equilibriumMesh;
+
+	if (!equilibriumMesh.Create()) {
+		std::cerr << "Failed to create equilibrium mesh.\n";
+		return 1;
+	}
+
+	equilibriumMesh.SetSize(15.0f);
+
 	const SimplexMapper simplexMapper(
 		Vec2f{ 0.0f, 0.75f },  // Cooperators
 		Vec2f{-0.75f, -0.55f}, // Defectors
@@ -126,6 +138,9 @@ int main(int argc, char* argv[])
 		std::cerr << "Failed to initialize the simulation session.\n";
 		return 1;
 	}
+
+	std::vector<SimplexEquilibrium> equilibria;
+	bool showEquilibria = false;
 
 	auto refreshSimulationVisualization = [&]() -> bool
 		{
@@ -155,8 +170,38 @@ int main(int argc, char* argv[])
 				simplexMapper.ToNdcPosition(simulation.CurrentState())
 			);
 
-			const SimplexState& finalState = trajectory.back();
+			return true;
+		};
 
+	auto rebuildEquilibriumVisualization = [&]() -> bool
+		{
+			const auto foundEquilibria = simulation.FindEquilibria();
+
+			if (!foundEquilibria.has_value()) {
+				std::cerr << "Failed to find Logit rest points.\n";
+				return false;
+			}
+
+			std::vector<Vec2f> equilibriumPositions;
+			equilibriumPositions.reserve(foundEquilibria->size());
+
+			for (const SimplexEquilibrium& equilibrium : *foundEquilibria) {
+				equilibriumPositions.push_back(
+					simplexMapper.ToNdcPosition(equilibrium.state)
+				);
+			}
+
+			if (!equilibriumMesh.SetPoints(
+				equilibriumPositions,
+				0.1f,
+				0.85f,
+				0.35f
+			)) {
+				std::cerr << "Failed to upload equilibrium markers.\n";
+				return false;
+			}
+
+			equilibria = *foundEquilibria;
 			return true;
 		};
 
@@ -381,7 +426,10 @@ int main(int argc, char* argv[])
 			if (!simulation.SetParameters(candidateParameters)) {
 				std::cerr << "Failed to update simulation parameters.\n";
 			}
-			else if (!refreshSimulationVisualization()) {
+			else if (
+				!refreshSimulationVisualization()
+				|| (showEquilibria && !rebuildEquilibriumVisualization())
+				) {
 				running = false;
 			}
 		}
@@ -391,6 +439,43 @@ int main(int argc, char* argv[])
 		ImGui::TextUnformatted("Higher eta: more exploratory choices.");
 
 		ImGui::Separator();
+
+		const bool equilibriumVisibilityChanged = ImGui::Checkbox(
+			"Show Logit rest points",
+			&showEquilibria
+		);
+
+		if (equilibriumVisibilityChanged && showEquilibria) {
+			if (!rebuildEquilibriumVisualization()) {
+				showEquilibria = false;
+			}
+		}
+
+		if (showEquilibria) {
+			if (equilibria.empty()) {
+				ImGui::TextUnformatted("No verified rest points found.");
+			}
+			else {
+				double largestResidual = 0.0;
+
+				for (const SimplexEquilibrium& equilibrium : equilibria) {
+					largestResidual = std::max(
+						largestResidual,
+						equilibrium.residual
+					);
+				}
+
+				ImGui::Text(
+					"Verified rest points: %d",
+					static_cast<int>(equilibria.size())
+				);
+
+				ImGui::Text(
+					"Largest residual: %.2e",
+					largestResidual
+				);
+			}
+		}
 
 		if (ImGui::CollapsingHeader("Trajectory integration")) {
 			constexpr double kMinimumTrajectoryTime = 1.0;
@@ -450,6 +535,11 @@ int main(int argc, char* argv[])
 		trajectoryMesh.Draw();
 
 		pointShaderProgram.Use();
+
+		if (showEquilibria) {
+			equilibriumMesh.Draw();
+		}
+
 		statePointMesh.Draw();
 		imguiLayer.Render();
 

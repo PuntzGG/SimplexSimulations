@@ -1,7 +1,9 @@
 #pragma once
 
 #include <vector>
+#include <optional>
 
+#include "SimplexEquilibriumFinder.h"
 #include "LogitDynamics.h"
 #include "OpggParameters.h"
 #include "SimplexState.h"
@@ -25,6 +27,9 @@ public:
     [[nodiscard]] const OpggParameters& Parameters() const;
     [[nodiscard]] const TrajectorySettings& Settings() const;
     [[nodiscard]] const std::vector<SimplexState>& Trajectory() const;
+    [[nodiscard]] std::optional<std::vector<SimplexEquilibrium>> FindEquilibria(
+        const SimplexEquilibriumSearchSettings& settings = {}
+    ) const;
 
 private:
     [[nodiscard]] bool RebuildTrajectory();
@@ -32,6 +37,7 @@ private:
     SimplexState currentState_;
     OpggParameters parameters_;
     TrajectorySettings trajectorySettings_;
+    SimplexEquilibriumFinder equilibriumFinder_;
     LogitDynamics dynamics_;
     SimplexTrajectoryIntegrator trajectoryIntegrator_;
     std::vector<SimplexState> trajectory_;
