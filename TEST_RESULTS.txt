@@ -1,0 +1,22 @@
+Local verification environment:
+- GNU C++ 14.2.0
+- Clang C++ 17.0.0
+- CMake generated C++20 builds
+- Warning flags: -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror (MSVC test target uses /W4 /WX /permissive-)
+- Clang UndefinedBehaviorSanitizer: -fsanitize=undefined, halt on first report
+
+Result:
+- GNU Release build succeeded and 1/1 CTest target passed.
+- Clang Release build succeeded and 1/1 CTest target passed.
+- Clang UndefinedBehaviorSanitizer build succeeded and 1/1 CTest target passed with no sanitizer report.
+- All scientific core, equilibrium-sweep, and SimulationSession assertions passed.
+- Both strict-warning Release builds completed without emitted warnings.
+- SDL/OpenGL resource-wrapper translation units passed strict GCC and Clang syntax checks against minimal API-shape stubs (this checks C++ syntax/ownership code, not the real Windows libraries).
+
+Not verified in this Linux environment:
+- Visual Studio project compilation.
+- Windows SDL3/GLEW runtime loading.
+- Interactive rendering behavior.
+- End-to-end execution of apply_polish.ps1 or restore_polish.ps1, because PowerShell was not installed in the delivery container.
+
+The installer uses guarded source-pattern/XML changes, creates rollback backups before writing, and aborts rather than guessing when the target source differs from the audited baseline. Perform the Windows acceptance checklist before merging the result into the main branch.

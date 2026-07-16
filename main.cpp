@@ -3,6 +3,7 @@
 #include <GL/glew.h>
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <optional>
 #include <utility>
@@ -29,25 +30,132 @@ namespace
     constexpr int kWindowWidth = 1200;
     constexpr int kWindowHeight = 1100;
 
-    [[nodiscard]] Vec2f WindowToNdcPosition(float windowX, float windowY)
+        struct ViewportRectangle final
     {
-        return {
-            (2.0f * windowX / static_cast<float>(kWindowWidth)) - 1.0f,
-            1.0f - (2.0f * windowY / static_cast<float>(kWindowHeight))
+        float left = 0.0f;
+        float top = 0.0f;
+        float width = 1.0f;
+        float height = 1.0f;
+    };
+
+    [[nodiscard]] bool QueryWindowSize(
+        SDL_Window* window,
+        int& width,
+        int& height
+    )
+    {
+        width = 0;
+        height = 0;
+        return window != nullptr
+            && SDL_GetWindowSize(window, &width, &height)
+            && width > 0
+            && height > 0;
+    }
+
+    [[nodiscard]] ViewportRectangle ComputeViewport(
+        int availableWidth,
+        int availableHeight
+    )
+    {
+        const float width = static_cast<float>(availableWidth);
+        const float height = static_cast<float>(availableHeight);
+        const float targetAspect =
+            static_cast<float>(kWindowWidth)
+            / static_cast<float>(kWindowHeight);
+        const float availableAspect = width / height;
+
+        if (availableAspect > targetAspect) {
+            const float viewportWidth = height * targetAspect;
+            return ViewportRectangle{
+                (width - viewportWidth) * 0.5f,
+                0.0f,
+                viewportWidth,
+                height
+            };
+        }
+
+        const float viewportHeight = width / targetAspect;
+        return ViewportRectangle{
+            0.0f,
+            (height - viewportHeight) * 0.5f,
+            width,
+            viewportHeight
         };
     }
 
-    [[nodiscard]] ImVec2 NdcToWindowPosition(Vec2f ndcPosition)
+    [[nodiscard]] Vec2f WindowToNdcPosition(
+        SDL_Window* window,
+        float windowX,
+        float windowY
+    )
     {
-        return ImVec2{
-            (ndcPosition.x + 1.0f)
-                * 0.5f
-                * static_cast<float>(kWindowWidth),
+        int width = 0;
+        int height = 0;
+        if (!QueryWindowSize(window, width, height)) {
+            return {};
+        }
 
-            (1.0f - ndcPosition.y)
-                * 0.5f
-                * static_cast<float>(kWindowHeight)
+        const ViewportRectangle viewport = ComputeViewport(width, height);
+        return {
+            (2.0f * (windowX - viewport.left) / viewport.width) - 1.0f,
+            1.0f - (2.0f * (windowY - viewport.top) / viewport.height)
         };
+    }
+
+    [[nodiscard]] ImVec2 NdcToWindowPosition(
+        SDL_Window* window,
+        Vec2f ndcPosition
+    )
+    {
+        int width = 0;
+        int height = 0;
+        if (!QueryWindowSize(window, width, height)) {
+            return {};
+        }
+
+        const ViewportRectangle viewport = ComputeViewport(width, height);
+        return ImVec2{
+            viewport.left
+                + (ndcPosition.x + 1.0f) * 0.5f * viewport.width,
+            viewport.top
+                + (1.0f - ndcPosition.y) * 0.5f * viewport.height
+        };
+    }
+
+    void UpdateOpenGlViewport(SDL_Window* window)
+    {
+        int pixelWidth = 0;
+        int pixelHeight = 0;
+        if (window == nullptr
+            || !SDL_GetWindowSizeInPixels(
+                window,
+                &pixelWidth,
+                &pixelHeight
+            )
+            || pixelWidth <= 0
+            || pixelHeight <= 0) {
+            return;
+        }
+
+        const ViewportRectangle viewport = ComputeViewport(
+            pixelWidth,
+            pixelHeight
+        );
+        const int viewportX = static_cast<int>(std::lround(viewport.left));
+        const int viewportY = static_cast<int>(std::lround(
+            static_cast<float>(pixelHeight)
+                - viewport.top
+                - viewport.height
+        ));
+        const int viewportWidth = static_cast<int>(std::lround(viewport.width));
+        const int viewportHeight = static_cast<int>(std::lround(viewport.height));
+
+        glViewport(
+            viewportX,
+            viewportY,
+            viewportWidth,
+            viewportHeight
+        );
     }
 
     [[nodiscard]] std::vector<Vec2f> BuildTrajectoryPositions(
@@ -220,8 +328,8 @@ int main(int argc, char* argv[])
 
     const SimplexMapper simplexMapper(
         Vec2f{ 0.0f, 0.75f },   // Cooperators / x
-        Vec2f{ -0.75f, -0.55f }, // Defectors / y
-        Vec2f{ 0.75f, -0.55f }   // Loners / z
+        Vec2f{ 0.75f, -0.55f }, // Defectors / y
+        Vec2f{ -0.75f, -0.55f }   // Loners / z
     );
 
     const Vec2f xSimplexVertex = simplexMapper.ToNdcPosition(
@@ -415,7 +523,7 @@ int main(int argc, char* argv[])
         [&](float windowX, float windowY) -> bool
         {
             const Vec2f clickedNdcPosition =
-                WindowToNdcPosition(windowX, windowY);
+                WindowToNdcPosition(window.NativeWindow(), windowX, windowY);
 
             const auto clickedState =
                 simplexMapper.FromNdcPosition(clickedNdcPosition);
@@ -435,7 +543,7 @@ int main(int argc, char* argv[])
         [&](float windowX, float windowY) -> bool
         {
             const Vec2f draggedNdcPosition =
-                WindowToNdcPosition(windowX, windowY);
+                WindowToNdcPosition(window.NativeWindow(), windowX, windowY);
 
             const auto draggedState =
                 simplexMapper.FromNdcPositionClamped(draggedNdcPosition);
@@ -451,16 +559,16 @@ int main(int argc, char* argv[])
         {
             ImDrawList* drawList = ImGui::GetForegroundDrawList();
 
-            const ImU32 labelColor = IM_COL32(255, 255, 255, 255);
+            const ImU32 labelColor = IM_COL32(25, 25, 25, 255);
 
             const ImVec2 xPosition =
-                NdcToWindowPosition(xSimplexVertex);
+                NdcToWindowPosition(window.NativeWindow(), xSimplexVertex);
 
             const ImVec2 yPosition =
-                NdcToWindowPosition(ySimplexVertex);
+                NdcToWindowPosition(window.NativeWindow(), ySimplexVertex);
 
             const ImVec2 zPosition =
-                NdcToWindowPosition(zSimplexVertex);
+                NdcToWindowPosition(window.NativeWindow(), zSimplexVertex);
 
             drawList->AddText(
                 ImVec2(xPosition.x - 4.0f, xPosition.y + 14.0f),
@@ -490,7 +598,7 @@ int main(int argc, char* argv[])
 
     std::cout << "Window created successfully.\n";
 
-    glViewport(0, 0, kWindowWidth, kWindowHeight);
+    UpdateOpenGlViewport(window.NativeWindow());
 
     bool running = true;
     bool draggingSimplexPoint = false;
@@ -503,6 +611,10 @@ int main(int argc, char* argv[])
 
             if (event.type == SDL_EVENT_QUIT) {
                 running = false;
+            }
+
+            if (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+                UpdateOpenGlViewport(window.NativeWindow());
             }
 
             if (
@@ -604,19 +716,11 @@ int main(int argc, char* argv[])
 
         constexpr int kMinimumGroupSize = 2;
         constexpr int kMaximumGroupSize = 20;
-
-        constexpr double kMinimumMultiplicationFactor = 0.1;
-        constexpr double kMaximumMultiplicationFactor = 10.0;
-
-        constexpr double kMinimumLonerPayoffMultiplier = 0.0;
-        constexpr double kMaximumLonerPayoffMultiplier = 5.0;
-
+        constexpr double kModelBoundaryMargin = 1e-4;
         constexpr double kMinimumContributionCost = 0.01;
         constexpr double kMaximumContributionCost = 5.0;
-
         constexpr double kMinimumPunishmentFraction = 0.0;
         constexpr double kMaximumPunishmentFraction = 1.0;
-
         constexpr double kMinimumLogitNoise = 0.001;
         constexpr double kMaximumLogitNoise = 1.0;
 
@@ -624,70 +728,103 @@ int main(int argc, char* argv[])
         bool parametersChanged = false;
 
         if (ImGui::SliderInt(
-            "Group size (n)",
-            &candidateParameters.groupSize,
-            kMinimumGroupSize,
-            kMaximumGroupSize
-        )) {
+                "Group size (n)",
+                &candidateParameters.groupSize,
+                kMinimumGroupSize,
+                kMaximumGroupSize)) {
+            parametersChanged = true;
+        }
+
+        const double minimumMultiplicationFactor =
+            1.0 + 2.0 * kModelBoundaryMargin;
+        const double maximumMultiplicationFactor =
+            static_cast<double>(candidateParameters.groupSize)
+                - kModelBoundaryMargin;
+        const double clampedMultiplicationFactor = std::clamp(
+            candidateParameters.multiplicationFactor,
+            minimumMultiplicationFactor,
+            maximumMultiplicationFactor
+        );
+        if (clampedMultiplicationFactor
+            != candidateParameters.multiplicationFactor) {
+            candidateParameters.multiplicationFactor =
+                clampedMultiplicationFactor;
             parametersChanged = true;
         }
 
         if (ImGui::SliderScalar(
-            "Multiplication factor (r)",
-            ImGuiDataType_Double,
-            &candidateParameters.multiplicationFactor,
-            &kMinimumMultiplicationFactor,
-            &kMaximumMultiplicationFactor,
-            "%.3f"
-        )) {
+                "Multiplication factor (r)",
+                ImGuiDataType_Double,
+                &candidateParameters.multiplicationFactor,
+                &minimumMultiplicationFactor,
+                &maximumMultiplicationFactor,
+                "%.3f")) {
+            parametersChanged = true;
+        }
+
+        const double minimumLonerPayoffMultiplier = kModelBoundaryMargin;
+        const double maximumLonerPayoffMultiplier = std::max(
+            minimumLonerPayoffMultiplier,
+            candidateParameters.multiplicationFactor
+                - 1.0
+                - kModelBoundaryMargin
+        );
+        const double clampedLonerPayoffMultiplier = std::clamp(
+            candidateParameters.lonerPayoffMultiplier,
+            minimumLonerPayoffMultiplier,
+            maximumLonerPayoffMultiplier
+        );
+        if (clampedLonerPayoffMultiplier
+            != candidateParameters.lonerPayoffMultiplier) {
+            candidateParameters.lonerPayoffMultiplier =
+                clampedLonerPayoffMultiplier;
             parametersChanged = true;
         }
 
         if (ImGui::SliderScalar(
-            "Loner payoff multiplier (sigma)",
-            ImGuiDataType_Double,
-            &candidateParameters.lonerPayoffMultiplier,
-            &kMinimumLonerPayoffMultiplier,
-            &kMaximumLonerPayoffMultiplier,
-            "%.3f"
-        )) {
+                "Loner payoff multiplier (sigma)",
+                ImGuiDataType_Double,
+                &candidateParameters.lonerPayoffMultiplier,
+                &minimumLonerPayoffMultiplier,
+                &maximumLonerPayoffMultiplier,
+                "%.3f")) {
             parametersChanged = true;
         }
 
         if (ImGui::SliderScalar(
-            "Contribution cost (c)",
-            ImGuiDataType_Double,
-            &candidateParameters.contributionCost,
-            &kMinimumContributionCost,
-            &kMaximumContributionCost,
-            "%.3f"
-        )) {
+                "Contribution cost (c)",
+                ImGuiDataType_Double,
+                &candidateParameters.contributionCost,
+                &kMinimumContributionCost,
+                &kMaximumContributionCost,
+                "%.3f")) {
             parametersChanged = true;
         }
 
         if (ImGui::SliderScalar(
-            "Punishment fraction (v)",
-            ImGuiDataType_Double,
-            &candidateParameters.punishmentFraction,
-            &kMinimumPunishmentFraction,
-            &kMaximumPunishmentFraction,
-            "%.3f"
-        )) {
+                "Punishment fraction (v)",
+                ImGuiDataType_Double,
+                &candidateParameters.punishmentFraction,
+                &kMinimumPunishmentFraction,
+                &kMaximumPunishmentFraction,
+                "%.3f")) {
             parametersChanged = true;
         }
 
         if (ImGui::SliderScalar(
-            "Logit noise (eta)",
-            ImGuiDataType_Double,
-            &candidateParameters.logitNoise,
-            &kMinimumLogitNoise,
-            &kMaximumLogitNoise,
-            "%.4f",
-            ImGuiSliderFlags_Logarithmic
-            | ImGuiSliderFlags_ClampOnInput
-        )) {
+                "Logit noise (eta)",
+                ImGuiDataType_Double,
+                &candidateParameters.logitNoise,
+                &kMinimumLogitNoise,
+                &kMaximumLogitNoise,
+                "%.4f",
+                ImGuiSliderFlags_Logarithmic
+                    | ImGuiSliderFlags_ClampOnInput)) {
             parametersChanged = true;
         }
+
+        ImGui::TextUnformatted("Model domain: 1 < r < n and 0 < sigma < r - 1.");
+
 
         if (parametersChanged) {
             const bool keepEquilibriumSweep =

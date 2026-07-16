@@ -18,16 +18,27 @@ public:
     ) const;
 
 private:
-    [[nodiscard]] static SimplexState AddScaledDerivative(
+    [[nodiscard]] static std::optional<SimplexDerivative> EvaluateChecked(
+        const SimplexDynamicModel& dynamics,
+        const SimplexState& state
+    );
+
+    [[nodiscard]] static std::optional<SimplexState> AddScaledDerivative(
         const SimplexState& state,
         const SimplexDerivative& derivative,
         double scale
     );
 
-    [[nodiscard]] static SimplexDerivative CombineRk4Derivatives(
-        const SimplexDerivative& k1,
-        const SimplexDerivative& k2,
-        const SimplexDerivative& k3,
-        const SimplexDerivative& k4
+    [[nodiscard]] static std::optional<SimplexState> TryRk4Step(
+        const SimplexDynamicModel& dynamics,
+        const SimplexState& state,
+        double timeStep
+    );
+
+    [[nodiscard]] static std::optional<SimplexState> AdvanceWithSubdivision(
+        const SimplexDynamicModel& dynamics,
+        const SimplexState& state,
+        double timeStep,
+        int remainingSubdivisionDepth
     );
 };

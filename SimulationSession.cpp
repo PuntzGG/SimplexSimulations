@@ -3,15 +3,18 @@
 #include <utility>
 
 SimulationSession::SimulationSession()
-    : currentState_(SimplexState::Normalized(1.0, 1.0, 1.0))
-    , parameters_()
-    , trajectorySettings_()
-    , dynamics_(parameters_)
+    : currentState_(SimplexState::Normalized(1.0, 1.0, 1.0)),
+      parameters_(),
+      trajectorySettings_(),
+      dynamics_(parameters_)
 {
 }
 
 bool SimulationSession::Initialize()
 {
+    if (!parameters_.IsComputable() || !trajectorySettings_.IsComputable()) {
+        return false;
+    }
     return RebuildTrajectory();
 }
 
@@ -21,18 +24,17 @@ bool SimulationSession::SetCurrentState(const SimplexState& state)
         return false;
     }
 
-    const auto trajectory = trajectoryIntegrator_.Integrate(
+    auto candidateTrajectory = trajectoryIntegrator_.Integrate(
         dynamics_,
         state,
         trajectorySettings_
     );
-
-    if (!trajectory.has_value()) {
+    if (!candidateTrajectory.has_value()) {
         return false;
     }
 
     currentState_ = state;
-    trajectory_ = std::move(*trajectory);
+    trajectory_ = std::move(*candidateTrajectory);
     return true;
 }
 
@@ -43,20 +45,18 @@ bool SimulationSession::SetParameters(const OpggParameters& parameters)
     }
 
     LogitDynamics candidateDynamics(parameters);
-
-    const auto trajectory = trajectoryIntegrator_.Integrate(
+    auto candidateTrajectory = trajectoryIntegrator_.Integrate(
         candidateDynamics,
         currentState_,
         trajectorySettings_
     );
-
-    if (!trajectory.has_value()) {
+    if (!candidateTrajectory.has_value()) {
         return false;
     }
 
     parameters_ = parameters;
     dynamics_ = std::move(candidateDynamics);
-    trajectory_ = std::move(*trajectory);
+    trajectory_ = std::move(*candidateTrajectory);
     return true;
 }
 
@@ -68,37 +68,37 @@ bool SimulationSession::SetTrajectorySettings(
         return false;
     }
 
-    const auto trajectory = trajectoryIntegrator_.Integrate(
+    auto candidateTrajectory = trajectoryIntegrator_.Integrate(
         dynamics_,
         currentState_,
         settings
     );
-
-    if (!trajectory.has_value()) {
+    if (!candidateTrajectory.has_value()) {
         return false;
     }
 
     trajectorySettings_ = settings;
-    trajectory_ = std::move(*trajectory);
+    trajectory_ = std::move(*candidateTrajectory);
     return true;
 }
 
-const SimplexState& SimulationSession::CurrentState() const
+const SimplexState& SimulationSession::CurrentState() const noexcept
 {
     return currentState_;
 }
 
-const OpggParameters& SimulationSession::Parameters() const
+const OpggParameters& SimulationSession::Parameters() const noexcept
 {
     return parameters_;
 }
 
-const TrajectorySettings& SimulationSession::Settings() const
+const TrajectorySettings& SimulationSession::Settings() const noexcept
 {
     return trajectorySettings_;
 }
 
-const std::vector<SimplexState>& SimulationSession::Trajectory() const
+const std::vector<SimplexState>&
+SimulationSession::Trajectory() const noexcept
 {
     return trajectory_;
 }
@@ -121,16 +121,15 @@ SimulationSession::GenerateEquilibriumSweep(
 
 bool SimulationSession::RebuildTrajectory()
 {
-    const auto trajectory = trajectoryIntegrator_.Integrate(
+    auto candidateTrajectory = trajectoryIntegrator_.Integrate(
         dynamics_,
         currentState_,
         trajectorySettings_
     );
-
-    if (!trajectory.has_value()) {
+    if (!candidateTrajectory.has_value()) {
         return false;
     }
 
-    trajectory_ = std::move(*trajectory);
+    trajectory_ = std::move(*candidateTrajectory);
     return true;
 }

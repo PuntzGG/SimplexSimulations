@@ -3,103 +3,152 @@
 #include <iostream>
 #include <string>
 
-//Only this .cpp file can use CompileShader.
 namespace
 {
-	// Compiles one shader stage and returns its OpenGL handle, or 0 on failure.
-	GLuint CompileShader(GLenum shaderType, const char* source)
-	{
-		GLuint shader = glCreateShader(shaderType);
-		glShaderSource(shader, 1, &source, nullptr);
-		glCompileShader(shader);
+    [[nodiscard]] GLuint CompileShader(
+        GLenum shaderType,
+        const char* source,
+        const char* stageName
+    )
+    {
+        if (source == nullptr || source[0] == '\0') {
+            std::cerr << "Cannot compile an empty " << stageName
+                      << " shader source.\n";
+            return 0;
+        }
 
-		GLint success = 0;
-		glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        const GLuint shader = glCreateShader(shaderType);
+        if (shader == 0) {
+            std::cerr << "glCreateShader failed for the " << stageName
+                      << " shader.\n";
+            return 0;
+        }
 
-		if (!success) {
-			GLint logLength = 0;
-			glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+        glShaderSource(shader, 1, &source, nullptr);
+        glCompileShader(shader);
 
-			std::string log(logLength, ' ');
-			glGetShaderInfoLog(shader, logLength, nullptr, log.data());
+        GLint success = GL_FALSE;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        if (success == GL_TRUE) {
+            return shader;
+        }
 
-			std::cerr << "Shader compilation failed:\n" << log << "\n";
+        GLint logLength = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+        std::string log(
+            logLength > 1 ? static_cast<std::size_t>(logLength) : 1U,
+            '\0'
+        );
+        GLsizei writtenLength = 0;
+        glGetShaderInfoLog(
+            shader,
+            static_cast<GLsizei>(log.size()),
+            &writtenLength,
+            log.data()
+        );
+        if (writtenLength >= 0
+            && static_cast<std::size_t>(writtenLength) < log.size()) {
+            log.resize(static_cast<std::size_t>(writtenLength));
+        }
 
-			glDeleteShader(shader);
-			return 0;
-		}
-
-		return shader;
-	}
+        std::cerr << stageName << " shader compilation failed:\n"
+                  << log << '\n';
+        glDeleteShader(shader);
+        return 0;
+    }
 }
-
 
 ShaderProgram::~ShaderProgram()
 {
-	Destroy();
+    Destroy();
 }
 
-bool ShaderProgram::Create(const char* vertexSource, const char* fragmentSource)
+bool ShaderProgram::Create(
+    const char* vertexSource,
+    const char* fragmentSource
+)
 {
-	// Replaces any previously owned program before creating a new one.
-	Destroy();
+    Destroy();
 
-	GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexSource);
-	if (vertexShader == 0) {
-		return false;
-	}
+    const GLuint vertexShader = CompileShader(
+        GL_VERTEX_SHADER,
+        vertexSource,
+        "Vertex"
+    );
+    if (vertexShader == 0) {
+        return false;
+    }
 
-	GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentSource);
-	if (fragmentShader == 0) {
-		glDeleteShader(vertexShader);
-		return false;
-	}
+    const GLuint fragmentShader = CompileShader(
+        GL_FRAGMENT_SHADER,
+        fragmentSource,
+        "Fragment"
+    );
+    if (fragmentShader == 0) {
+        glDeleteShader(vertexShader);
+        return false;
+    }
 
-	// Links the compiled shader stages into one executable GPU program.
-	GLuint program = glCreateProgram();
-	glAttachShader(program, vertexShader);
-	glAttachShader(program, fragmentShader);
-	glLinkProgram(program);
+    const GLuint program = glCreateProgram();
+    if (program == 0) {
+        std::cerr << "glCreateProgram failed.\n";
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+        return false;
+    }
 
-	GLint success = 0;
-	glGetProgramiv(program, GL_LINK_STATUS, &success);
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
 
-	if (!success) {
-		GLint logLength = 0;
-		glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+    GLint success = GL_FALSE;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (success != GL_TRUE) {
+        GLint logLength = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+        std::string log(
+            logLength > 1 ? static_cast<std::size_t>(logLength) : 1U,
+            '\0'
+        );
+        GLsizei writtenLength = 0;
+        glGetProgramInfoLog(
+            program,
+            static_cast<GLsizei>(log.size()),
+            &writtenLength,
+            log.data()
+        );
+        if (writtenLength >= 0
+            && static_cast<std::size_t>(writtenLength) < log.size()) {
+            log.resize(static_cast<std::size_t>(writtenLength));
+        }
 
-		std::string log(logLength, ' ');
-		glGetProgramInfoLog(program, logLength, nullptr, log.data());
+        std::cerr << "Shader program linking failed:\n" << log << '\n';
+        glDetachShader(program, vertexShader);
+        glDetachShader(program, fragmentShader);
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+        glDeleteProgram(program);
+        return false;
+    }
 
-		std::cerr << "Shader program linking failed:\n" << log << "\n";
+    glDetachShader(program, vertexShader);
+    glDetachShader(program, fragmentShader);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
 
-		glDetachShader(program, vertexShader);
-		glDetachShader(program, fragmentShader);
-		glDeleteShader(vertexShader);
-		glDeleteShader(fragmentShader);
-		glDeleteProgram(program);
-		return false;
-	}
-
-	// After linking, the program keeps the compiled code; shader objects can go.
-	glDetachShader(program, vertexShader);
-	glDetachShader(program, fragmentShader);
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
-
-	id_ = program;
-	return true;
+    id_ = program;
+    return true;
 }
 
-void ShaderProgram::Use() const
+void ShaderProgram::Use() const noexcept
 {
-	glUseProgram(id_);
+    glUseProgram(id_);
 }
 
-void ShaderProgram::Destroy()
+void ShaderProgram::Destroy() noexcept
 {
-	if (id_ != 0) {
-		glDeleteProgram(id_);
-		id_ = 0;
-	}
+    if (id_ != 0) {
+        glDeleteProgram(id_);
+        id_ = 0;
+    }
 }

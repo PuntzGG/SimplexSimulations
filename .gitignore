@@ -364,3 +364,6 @@ FodyWeavers.xsd
 
 # Local third-party dependencies
 deps/
+imgui.ini
+build-tests/
+.scientific-polish-backup-*/

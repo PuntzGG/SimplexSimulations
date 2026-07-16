@@ -1,12 +1,12 @@
 #pragma once
 
-#include <vector>
 #include <optional>
+#include <vector>
 
-#include "LogitEquilibriumSweep.h"
-#include "SimplexEquilibriumFinder.h"
 #include "LogitDynamics.h"
+#include "LogitEquilibriumSweep.h"
 #include "OpggParameters.h"
+#include "SimplexEquilibriumFinder.h"
 #include "SimplexState.h"
 #include "SimplexTrajectoryIntegrator.h"
 #include "TrajectorySettings.h"
@@ -17,24 +17,26 @@ public:
     SimulationSession();
 
     [[nodiscard]] bool Initialize();
-
     [[nodiscard]] bool SetCurrentState(const SimplexState& state);
     [[nodiscard]] bool SetParameters(const OpggParameters& parameters);
     [[nodiscard]] bool SetTrajectorySettings(
         const TrajectorySettings& settings
     );
 
-    [[nodiscard]] const SimplexState& CurrentState() const;
-    [[nodiscard]] const OpggParameters& Parameters() const;
-    [[nodiscard]] const TrajectorySettings& Settings() const;
-    [[nodiscard]] const std::vector<SimplexState>& Trajectory() const;
-    [[nodiscard]] std::optional<std::vector<SimplexEquilibrium>> FindEquilibria(
+    [[nodiscard]] const SimplexState& CurrentState() const noexcept;
+    [[nodiscard]] const OpggParameters& Parameters() const noexcept;
+    [[nodiscard]] const TrajectorySettings& Settings() const noexcept;
+    [[nodiscard]] const std::vector<SimplexState>& Trajectory() const noexcept;
+
+    [[nodiscard]] std::optional<std::vector<SimplexEquilibrium>>
+    FindEquilibria(
         const SimplexEquilibriumSearchSettings& settings = {}
     ) const;
+
     [[nodiscard]] std::optional<LogitEquilibriumSweepResult>
-        GenerateEquilibriumSweep(
-            const LogitEquilibriumSweepSettings& settings
-        ) const;
+    GenerateEquilibriumSweep(
+        const LogitEquilibriumSweepSettings& settings
+    ) const;
 
 private:
     [[nodiscard]] bool RebuildTrajectory();

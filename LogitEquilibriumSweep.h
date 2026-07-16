@@ -16,21 +16,18 @@ struct LogitEquilibriumSweepSettings final
 {
     LogitEquilibriumSweepParameter parameter =
         LogitEquilibriumSweepParameter::LogitNoise;
-
     double minimumParameter = 0.001;
     double maximumParameter = 1.0;
-    int sampleCount = 81;
-
+    int sampleCount = 1601;
     double maximumBranchStepDistance = 0.1;
-
     SimplexEquilibriumSearchSettings equilibriumSearchSettings{};
 
-    [[nodiscard]] bool IsComputable() const;
+    [[nodiscard]] bool IsComputable() const noexcept;
 };
 
 struct LogitEquilibriumSweepSample final
 {
-    double parameterValue;
+    double parameterValue = 0.0;
     SimplexEquilibrium equilibrium;
 };
 
@@ -41,12 +38,11 @@ struct LogitEquilibriumBranch final
 
 struct LogitEquilibriumSweepResult final
 {
-    LogitEquilibriumSweepParameter parameter;
-    OpggParameters baselineParameters;
-
-    double minimumParameter;
-    double maximumParameter;
-
+    LogitEquilibriumSweepParameter parameter =
+        LogitEquilibriumSweepParameter::LogitNoise;
+    OpggParameters baselineParameters{};
+    double minimumParameter = 0.0;
+    double maximumParameter = 0.0;
     std::vector<LogitEquilibriumBranch> branches;
 };
 

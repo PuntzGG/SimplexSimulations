@@ -1,0 +1,9 @@
+Repository: https://github.com/PuntzGG/SimplexSimulations
+Branch: main
+Audited baseline commit: fff4da059bf10252f36cf41ab83489d65812de32 (short: fff4da0)
+Commit title: Improve equilibrium sweep visualization
+Commit date: 2026-07-10
+
+This package is an overlay/installer rather than a replacement Git history archive.
+It preserves files unrelated to the corrections and creates a timestamped backup
+before modifying the target working tree.

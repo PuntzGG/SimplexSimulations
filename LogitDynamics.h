@@ -4,8 +4,8 @@
 
 #include "OpggParameters.h"
 #include "SimplexDerivative.h"
-#include "SimplexState.h"
 #include "SimplexDynamicModel.h"
+#include "SimplexState.h"
 
 class LogitDynamics final : public SimplexDynamicModel
 {
@@ -17,15 +17,22 @@ public:
     ) const override;
 
 private:
-    struct Payoffs
+    struct Payoffs final
     {
         double cooperators = 0.0;
         double defectors = 0.0;
         double loners = 0.0;
+
+        [[nodiscard]] bool IsFinite() const noexcept;
     };
 
-    [[nodiscard]] Payoffs EvaluatePayoffs(const SimplexState& state) const;
-    [[nodiscard]] double ComputeParticipationTerm(double lonerFrequency) const;
+    [[nodiscard]] std::optional<Payoffs> EvaluatePayoffs(
+        const SimplexState& state
+    ) const;
+
+    [[nodiscard]] double ComputeParticipationTerm(
+        double lonerFrequency
+    ) const noexcept;
 
     OpggParameters parameters_;
 };

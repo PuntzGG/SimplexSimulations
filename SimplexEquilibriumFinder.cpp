@@ -2,80 +2,75 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace
 {
-    constexpr double kInteriorMargin = 1e-12;
-    constexpr int kMaximumBacktrackingSteps = 24;
-
-    struct Coordinates
+    struct Coordinates final
     {
-        double x;
-        double y;
+        double x = 0.0;
+        double y = 0.0;
     };
 
-    struct VectorFieldValue
+    struct VectorFieldValue final
     {
-        double dx;
-        double dy;
-        double dz;
-        double residual;
+        double dx = 0.0;
+        double dy = 0.0;
+        double residual = 0.0;
     };
 
-    struct Jacobian
+    struct Jacobian final
     {
-        double dxByDx;
-        double dxByDy;
-        double dyByDx;
-        double dyByDy;
+        double dxByDx = 0.0;
+        double dxByDy = 0.0;
+        double dyByDx = 0.0;
+        double dyByDy = 0.0;
     };
 
     [[nodiscard]] std::optional<SimplexState> MakeInteriorState(
-        const Coordinates& coordinates
+        const Coordinates& coordinates,
+        double margin
     )
     {
         const double z = 1.0 - coordinates.x - coordinates.y;
-
         if (!std::isfinite(coordinates.x)
             || !std::isfinite(coordinates.y)
             || !std::isfinite(z)
-            || coordinates.x <= kInteriorMargin
-            || coordinates.y <= kInteriorMargin
-            || z <= kInteriorMargin) {
+            || coordinates.x <= margin
+            || coordinates.y <= margin
+            || z <= margin) {
             return std::nullopt;
         }
 
         return SimplexState::TryCreate(
             coordinates.x,
             coordinates.y,
-            z
+            z,
+            std::max(SimplexState::kDefaultEpsilon, margin)
         );
     }
 
     [[nodiscard]] std::optional<VectorFieldValue> EvaluateVectorField(
         const SimplexDynamicModel& dynamics,
-        const Coordinates& coordinates
+        const Coordinates& coordinates,
+        const SimplexEquilibriumSearchSettings& settings
     )
     {
-        const auto state = MakeInteriorState(coordinates);
-
+        const auto state = MakeInteriorState(coordinates, settings.interiorMargin);
         if (!state.has_value()) {
             return std::nullopt;
         }
 
         const auto derivative = dynamics.Evaluate(*state);
-
         if (!derivative.has_value()
-            || !std::isfinite(derivative->dx)
-            || !std::isfinite(derivative->dy)
-            || !std::isfinite(derivative->dz)) {
+            || !derivative->IsFinite()
+            || !derivative->IsTangent()) {
             return std::nullopt;
         }
 
         return VectorFieldValue{
             derivative->dx,
             derivative->dy,
-            derivative->dz,
             std::max({
                 std::abs(derivative->dx),
                 std::abs(derivative->dy),
@@ -90,48 +85,44 @@ namespace
         const SimplexEquilibriumSearchSettings& settings
     )
     {
-        const double availableX = std::min(
-            coordinates.x - kInteriorMargin,
-            1.0 - kInteriorMargin - coordinates.x - coordinates.y
-        );
-
-        const double availableY = std::min(
-            coordinates.y - kInteriorMargin,
-            1.0 - kInteriorMargin - coordinates.x - coordinates.y
-        );
-
-        const double xStep = std::min(
+        const double z = 1.0 - coordinates.x - coordinates.y;
+        const double xStep = std::min({
             settings.finiteDifferenceStep,
-            availableX * 0.5
-        );
-
-        const double yStep = std::min(
+            (coordinates.x - settings.interiorMargin) * 0.5,
+            (z - settings.interiorMargin) * 0.5
+        });
+        const double yStep = std::min({
             settings.finiteDifferenceStep,
-            availableY * 0.5
-        );
+            (coordinates.y - settings.interiorMargin) * 0.5,
+            (z - settings.interiorMargin) * 0.5
+        });
 
-        if (xStep <= 0.0 || yStep <= 0.0) {
+        if (!std::isfinite(xStep)
+            || !std::isfinite(yStep)
+            || xStep <= 0.0
+            || yStep <= 0.0) {
             return std::nullopt;
         }
 
         const auto positiveX = EvaluateVectorField(
             dynamics,
-            Coordinates{ coordinates.x + xStep, coordinates.y }
+            Coordinates{ coordinates.x + xStep, coordinates.y },
+            settings
         );
-
         const auto negativeX = EvaluateVectorField(
             dynamics,
-            Coordinates{ coordinates.x - xStep, coordinates.y }
+            Coordinates{ coordinates.x - xStep, coordinates.y },
+            settings
         );
-
         const auto positiveY = EvaluateVectorField(
             dynamics,
-            Coordinates{ coordinates.x, coordinates.y + yStep }
+            Coordinates{ coordinates.x, coordinates.y + yStep },
+            settings
         );
-
         const auto negativeY = EvaluateVectorField(
             dynamics,
-            Coordinates{ coordinates.x, coordinates.y - yStep }
+            Coordinates{ coordinates.x, coordinates.y - yStep },
+            settings
         );
 
         if (!positiveX.has_value()
@@ -155,26 +146,40 @@ namespace
         const SimplexEquilibriumSearchSettings& settings
     )
     {
-        auto value = EvaluateVectorField(dynamics, coordinates);
-
+        auto value = EvaluateVectorField(dynamics, coordinates, settings);
         if (!value.has_value()) {
             return std::nullopt;
         }
 
         for (int iteration = 0;
-            iteration < settings.maximumNewtonIterations;
-            ++iteration) {
+             iteration < settings.maximumNewtonIterations;
+             ++iteration) {
             if (value->residual <= settings.residualTolerance) {
-                const auto state = MakeInteriorState(coordinates);
-
+                const auto state = MakeInteriorState(
+                    coordinates,
+                    settings.interiorMargin
+                );
                 if (!state.has_value()) {
                     return std::nullopt;
                 }
 
-                return SimplexEquilibrium{
-                    *state,
-                    value->residual
-                };
+                const auto verification = dynamics.Evaluate(*state);
+                if (!verification.has_value()
+                    || !verification->IsFinite()
+                    || !verification->IsTangent()) {
+                    return std::nullopt;
+                }
+
+                const double verifiedResidual = std::max({
+                    std::abs(verification->dx),
+                    std::abs(verification->dy),
+                    std::abs(verification->dz)
+                });
+                if (verifiedResidual > settings.residualTolerance) {
+                    return std::nullopt;
+                }
+
+                return SimplexEquilibrium{ *state, verifiedResidual };
             }
 
             const auto jacobian = EstimateJacobian(
@@ -182,7 +187,6 @@ namespace
                 coordinates,
                 settings
             );
-
             if (!jacobian.has_value()) {
                 return std::nullopt;
             }
@@ -190,58 +194,51 @@ namespace
             const double determinant =
                 jacobian->dxByDx * jacobian->dyByDy
                 - jacobian->dxByDy * jacobian->dyByDx;
-
             if (!std::isfinite(determinant)
-                || std::abs(determinant) <= 1e-14) {
+                || std::abs(determinant)
+                    <= settings.minimumJacobianDeterminant) {
                 return std::nullopt;
             }
 
             const double stepX =
-                (
-                    jacobian->dxByDy * value->dy
-                    - jacobian->dyByDy * value->dx
-                    )
+                (jacobian->dxByDy * value->dy
+                    - jacobian->dyByDy * value->dx)
                 / determinant;
-
             const double stepY =
-                (
-                    jacobian->dyByDx * value->dx
-                    - jacobian->dxByDx * value->dy
-                    )
+                (jacobian->dyByDx * value->dx
+                    - jacobian->dxByDx * value->dy)
                 / determinant;
-
             if (!std::isfinite(stepX) || !std::isfinite(stepY)) {
                 return std::nullopt;
             }
 
-            bool acceptedStep = false;
+            bool accepted = false;
             double scale = 1.0;
-
             for (int attempt = 0;
-                attempt < kMaximumBacktrackingSteps;
-                ++attempt) {
+                 attempt < settings.maximumBacktrackingSteps;
+                 ++attempt) {
                 const Coordinates candidate{
                     coordinates.x + scale * stepX,
                     coordinates.y + scale * stepY
                 };
-
                 const auto candidateValue = EvaluateVectorField(
                     dynamics,
-                    candidate
+                    candidate,
+                    settings
                 );
 
                 if (candidateValue.has_value()
                     && candidateValue->residual < value->residual) {
                     coordinates = candidate;
                     value = candidateValue;
-                    acceptedStep = true;
+                    accepted = true;
                     break;
                 }
 
                 scale *= 0.5;
             }
 
-            if (!acceptedStep) {
+            if (!accepted) {
                 return std::nullopt;
             }
         }
@@ -255,32 +252,35 @@ namespace
         double duplicateDistance
     )
     {
+        const double thresholdSquared = duplicateDistance * duplicateDistance;
         for (const SimplexEquilibrium& existing : equilibria) {
             const double dx = candidate.state.X() - existing.state.X();
             const double dy = candidate.state.Y() - existing.state.Y();
             const double dz = candidate.state.Z() - existing.state.Z();
-
-            const double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
-
-            if (distance <= duplicateDistance) {
+            if (dx * dx + dy * dy + dz * dz <= thresholdSquared) {
                 return true;
             }
         }
-
         return false;
     }
 }
 
-bool SimplexEquilibriumSearchSettings::IsComputable() const
+bool SimplexEquilibriumSearchSettings::IsComputable() const noexcept
 {
     return latticeResolution >= 3
         && maximumNewtonIterations > 0
+        && maximumBacktrackingSteps > 0
         && std::isfinite(finiteDifferenceStep)
         && std::isfinite(residualTolerance)
         && std::isfinite(duplicateDistance)
+        && std::isfinite(interiorMargin)
+        && std::isfinite(minimumJacobianDeterminant)
         && finiteDifferenceStep > 0.0
         && residualTolerance > 0.0
-        && duplicateDistance > 0.0;
+        && duplicateDistance > 0.0
+        && interiorMargin >= 0.0
+        && interiorMargin < 1.0 / 3.0
+        && minimumJacobianDeterminant > 0.0;
 }
 
 std::optional<std::vector<SimplexEquilibrium>>
@@ -294,65 +294,55 @@ SimplexEquilibriumFinder::Find(
     }
 
     if (!EvaluateVectorField(
-        dynamics,
-        Coordinates{ 1.0 / 3.0, 1.0 / 3.0 }
-    ).has_value()) {
+            dynamics,
+            Coordinates{ 1.0 / 3.0, 1.0 / 3.0 },
+            settings
+        ).has_value()) {
         return std::nullopt;
     }
 
     std::vector<SimplexEquilibrium> equilibria;
 
-    auto tryAddEquilibrium = [&](const Coordinates& seed)
-        {
-            const auto equilibrium = RefineEquilibrium(
-                dynamics,
-                seed,
-                settings
-            );
+    const auto tryAdd = [&](const Coordinates& seed) {
+        const auto equilibrium = RefineEquilibrium(dynamics, seed, settings);
+        if (equilibrium.has_value()
+            && !IsDuplicate(
+                *equilibrium,
+                equilibria,
+                settings.duplicateDistance
+            )) {
+            equilibria.push_back(*equilibrium);
+        }
+    };
 
-            if (equilibrium.has_value()
-                && !IsDuplicate(
-                    *equilibrium,
-                    equilibria,
-                    settings.duplicateDistance
-                )) {
-                equilibria.push_back(*equilibrium);
-            }
-        };
-
-    const double resolution =
-        static_cast<double>(settings.latticeResolution);
-
+    const double resolution = static_cast<double>(settings.latticeResolution);
     for (int xIndex = 1;
-        xIndex < settings.latticeResolution - 1;
-        ++xIndex) {
+         xIndex < settings.latticeResolution - 1;
+         ++xIndex) {
         for (int yIndex = 1;
-            xIndex + yIndex < settings.latticeResolution;
-            ++yIndex) {
-            tryAddEquilibrium(Coordinates{
+             xIndex + yIndex < settings.latticeResolution;
+             ++yIndex) {
+            tryAdd(Coordinates{
                 static_cast<double>(xIndex) / resolution,
                 static_cast<double>(yIndex) / resolution
-                });
+            });
         }
     }
 
-    constexpr double kNearEdge = 1e-3;
-
-    tryAddEquilibrium(Coordinates{ 1.0 / 3.0, 1.0 / 3.0 });
-    tryAddEquilibrium(Coordinates{ 1.0 - 2.0 * kNearEdge, kNearEdge });
-    tryAddEquilibrium(Coordinates{ kNearEdge, 1.0 - 2.0 * kNearEdge });
-    tryAddEquilibrium(Coordinates{ kNearEdge, kNearEdge });
+    const double nearEdge = std::max(1e-3, settings.interiorMargin * 10.0);
+    tryAdd(Coordinates{ 1.0 / 3.0, 1.0 / 3.0 });
+    tryAdd(Coordinates{ 1.0 - 2.0 * nearEdge, nearEdge });
+    tryAdd(Coordinates{ nearEdge, 1.0 - 2.0 * nearEdge });
+    tryAdd(Coordinates{ nearEdge, nearEdge });
 
     std::sort(
         equilibria.begin(),
         equilibria.end(),
         [](const SimplexEquilibrium& left,
-            const SimplexEquilibrium& right)
-        {
+           const SimplexEquilibrium& right) {
             if (left.state.X() != right.state.X()) {
                 return left.state.X() < right.state.X();
             }
-
             return left.state.Y() < right.state.Y();
         }
     );

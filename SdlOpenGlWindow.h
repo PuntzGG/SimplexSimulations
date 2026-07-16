@@ -13,9 +13,14 @@ public:
 
     [[nodiscard]] bool Create(const char* title, int width, int height);
     void SwapBuffers() const;
-    [[nodiscard]] SDL_Window* NativeWindow() const { return window_; }
-    [[nodiscard]] SDL_GLContext GlContext() const { return context_; }
-    void Destroy();
+
+    [[nodiscard]] SDL_Window* NativeWindow() const noexcept { return window_; }
+    [[nodiscard]] SDL_GLContext GlContext() const noexcept { return context_; }
+
+    [[nodiscard]] bool GetWindowSize(int& width, int& height) const noexcept;
+    [[nodiscard]] bool GetDrawableSize(int& width, int& height) const noexcept;
+
+    void Destroy() noexcept;
 
 private:
     SDL_Window* window_ = nullptr;

@@ -1,6 +1,7 @@
 #include "LogitDynamics.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 LogitDynamics::LogitDynamics(OpggParameters parameters)
@@ -8,48 +9,63 @@ LogitDynamics::LogitDynamics(OpggParameters parameters)
 {
 }
 
+bool LogitDynamics::Payoffs::IsFinite() const noexcept
+{
+    return std::isfinite(cooperators)
+        && std::isfinite(defectors)
+        && std::isfinite(loners);
+}
+
 std::optional<SimplexDerivative> LogitDynamics::Evaluate(
     const SimplexState& state
 ) const
 {
-    if (!parameters_.IsComputable()) {
+    if (!parameters_.IsComputable() || !state.IsValid()) {
         return std::nullopt;
     }
 
-    const Payoffs payoffs = EvaluatePayoffs(state);
-
-    const double scaledCooperatorPayoff = payoffs.cooperators / parameters_.logitNoise;
-    const double scaledDefectorPayoff = payoffs.defectors / parameters_.logitNoise;
-    const double scaledLonerPayoff = payoffs.loners / parameters_.logitNoise;
-
-    const double maxScaledPayoff = std::max({
-        scaledCooperatorPayoff,
-        scaledDefectorPayoff,
-        scaledLonerPayoff
-        });
-
-    const double cooperatorWeight = std::exp(scaledCooperatorPayoff - maxScaledPayoff);
-    const double defectorWeight = std::exp(scaledDefectorPayoff - maxScaledPayoff);
-    const double lonerWeight = std::exp(scaledLonerPayoff - maxScaledPayoff);
-
-    const double totalWeight = cooperatorWeight + defectorWeight + lonerWeight;
-
-    if (totalWeight <= 0.0 || !std::isfinite(totalWeight)) {
+    const auto payoffs = EvaluatePayoffs(state);
+    if (!payoffs.has_value()) {
         return std::nullopt;
     }
 
-    const double targetCooperators = cooperatorWeight / totalWeight;
-    const double targetDefectors = defectorWeight / totalWeight;
-    const double targetLoners = lonerWeight / totalWeight;
+    const double maximumPayoff = std::max({
+        payoffs->cooperators,
+        payoffs->defectors,
+        payoffs->loners
+    });
 
-    return SimplexDerivative{
-        targetCooperators - state.X(),
-        targetDefectors - state.Y(),
-        targetLoners - state.Z()
+    // Subtract before dividing by eta. All exponents are non-positive, so
+    // overflow is impossible even for very small positive eta.
+    const std::array<double, 3> weights{
+        std::exp((payoffs->cooperators - maximumPayoff) / parameters_.logitNoise),
+        std::exp((payoffs->defectors - maximumPayoff) / parameters_.logitNoise),
+        std::exp((payoffs->loners - maximumPayoff) / parameters_.logitNoise)
     };
+
+    const double totalWeight = weights[0] + weights[1] + weights[2];
+    if (!std::isfinite(totalWeight) || totalWeight <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double targetX = weights[0] / totalWeight;
+    const double targetY = weights[1] / totalWeight;
+    const double targetZ = 1.0 - targetX - targetY;
+
+    const SimplexDerivative derivative{
+        targetX - state.X(),
+        targetY - state.Y(),
+        targetZ - state.Z()
+    };
+
+    if (!derivative.IsTangent()) {
+        return std::nullopt;
+    }
+
+    return derivative;
 }
 
-LogitDynamics::Payoffs LogitDynamics::EvaluatePayoffs(
+std::optional<LogitDynamics::Payoffs> LogitDynamics::EvaluatePayoffs(
     const SimplexState& state
 ) const
 {
@@ -60,43 +76,43 @@ LogitDynamics::Payoffs LogitDynamics::EvaluatePayoffs(
     const double c = parameters_.contributionCost;
     const double r = parameters_.multiplicationFactor;
     const double sigma = parameters_.lonerPayoffMultiplier;
-    const double v = parameters_.punishmentFraction;
+    const double d = parameters_.punishmentFraction;
     const int n = parameters_.groupSize;
 
     const double zToNMinusOne = std::pow(z, n - 1);
     const double participationTerm = ComputeParticipationTerm(z);
 
-    const double cooperatorPayoff =
+    const Payoffs result{
         c * sigma * zToNMinusOne
-        + (r - 1.0) * c * (1.0 - zToNMinusOne)
-        - r * c * y * participationTerm;
-
-    const double defectorPayoff =
+            + (r - 1.0) * c * (1.0 - zToNMinusOne)
+            - r * c * y * participationTerm,
         c * sigma * zToNMinusOne
-        + (1.0 - v) * r * c * x * participationTerm;
-
-    const double lonerPayoff = c * sigma;
-
-    return Payoffs{
-        cooperatorPayoff,
-        defectorPayoff,
-        lonerPayoff
+            + (1.0 - d) * r * c * x * participationTerm,
+        c * sigma
     };
-}
 
-double LogitDynamics::ComputeParticipationTerm(double lonerFrequency) const
-{
-    constexpr double kNearPureLonerEpsilon = 1e-8;
-
-    const double z = lonerFrequency;
-    const int n = parameters_.groupSize;
-    const double oneMinusZ = 1.0 - z;
-
-    if (std::abs(oneMinusZ) <= kNearPureLonerEpsilon) {
-        return 0.5 * static_cast<double>(n - 1);
+    if (!result.IsFinite()) {
+        return std::nullopt;
     }
 
-    const double geometricSum = (1.0 - std::pow(z, n)) / oneMinusZ;
+    return result;
+}
 
-    return (1.0 - (geometricSum / static_cast<double>(n))) / oneMinusZ;
+double LogitDynamics::ComputeParticipationTerm(
+    double lonerFrequency
+) const noexcept
+{
+    // Algebraically equivalent to
+    // [1 - (1/n)(1-z^n)/(1-z)]/(1-z), but evaluated as a polynomial:
+    // (1/n) * sum_{j=0}^{n-2} (n-1-j) z^j.
+    // This form is stable at z=1 and gives the exact limit (n-1)/2.
+    const int n = parameters_.groupSize;
+    double polynomial = 1.0;
+
+    for (int coefficient = 2; coefficient <= n - 1; ++coefficient) {
+        polynomial = polynomial * lonerFrequency
+            + static_cast<double>(coefficient);
+    }
+
+    return polynomial / static_cast<double>(n);
 }
