@@ -1,46 +1,49 @@
-# Scientific polish change log
+# SimplexBeast implementation change log
 
-Baseline: repository `main` at commit `fff4da0` (`Improve equilibrium sweep visualization`, 2026-07-10).
+Planning baseline: repository `main` at commit `e7805e1`.
 
-## Numerical core
+## Product identity and build
 
-- Removed projection/clamp normalization from RK4 stages.
-- Added tangent-vector and finite-value validation.
-- Integrated in two independent simplex coordinates and reconstructed the third.
-- Added internal step subdivision for otherwise invalid RK stages.
-- Made excessive requested step counts fail instead of silently shortening time.
-- Rewrote the OPGG participation term as a stable polynomial valid at `z = 1`.
-- Hardened Logit softmax for very small positive noise.
-- Added strict OPGG model-domain validation.
-- Added explicit interior-equilibrium documentation and final residual verification.
-- Hardened equilibrium-sweep endpoint sampling and conservative branch construction.
-- Preserved transactional session updates: failed state, parameter, or integration-setting changes do not partially commit.
+- Renamed the Visual Studio solution/project/output to `SimplexBeast`.
+- Added a vcpkg manifest for SDL3 and GLEW and project-local x64 dependency paths.
+- Added every new source/header to the Visual Studio project and filters.
+- Kept Debug as a console application for diagnostics and made Release a normal windowed application.
 
-## Interaction and platform patch
+## Scientific model layer
 
-The installer patches the existing `main.cpp` without replacing unrelated UI code:
+- Extracted the stable OPGG payoff calculation into `OpggPayoffEvaluator`.
+- Added transactional switching between Logit, Equal-split Best Response, and Replicator dynamics.
+- Added scale-aware Best Response tie handling and explicit model capabilities.
+- Preserved the stable participation polynomial and overflow-safe Logit softmax.
 
-- mouse/NDC transforms query the current logical window size;
-- the scientific viewport preserves its aspect ratio while the window resizes;
-- OpenGL viewport uses the current drawable pixel size;
-- viewport updates on `SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED`;
-- OPGG sliders remain inside `1 < r < n` and `0 < sigma < r - 1`;
-- simplex labels use a visible dark color on the white background.
+## Simulation and interaction
 
-The SDL window wrapper now:
+- Exposed the validated RK4 one-step operation for reuse.
+- Added fixed-step Real Time playback with Start/Pause/Reset, reseeding, logarithmic speed control, substep cap, stall handling, and explicit behind/error status.
+- Coalesced pointer movement to one state update per rendered frame.
+- Added Shift+click equilibrium selection with priority over dragging.
+- Added the live/static purple response-target ring where the active model defines one.
 
-- checks OpenGL attribute-setting failures;
-- creates a resizable, high-pixel-density window;
-- explicitly makes the context current;
-- requests vertical synchronization and reports a warning if unavailable;
-- exposes logical and drawable size queries.
+## Analysis
 
-The shader-program owner now validates empty sources and OpenGL object creation and emits compile/link diagnostics.
+- Expanded equilibrium search to model-aware interior, edge, and vertex behavior.
+- Solved Replicator interior roots through payoff equality to prevent near-boundary slow states from being misreported as equilibria.
+- Added reduced finite-difference Jacobians, boundary stencils, stability classification, complex eigenpairs, tangent-vector lifting, and defective/repeated detection.
+- Added a complete equilibrium inspector and real eigendirection overlays.
 
-## Build and repository hygiene
+## Field visualization
 
-- Removes unsupported Win32 configurations.
-- Fixes `SdlOpenGlWindow.h` being classified as a compilation unit.
-- Removes the tracked generated `imgui.ini` and ignores future local layout files, test builds, and polish backups.
-- Adds a complete README and scientific-validation notes.
-- Adds a dependency-free scientific-core CMake test target.
+- Added a full-simplex barycentric speed heat map with exact topology, numeric legend, relative/locked ranges, and the blue-cyan-green-yellow-orange-red palette.
+- Added Best Response region metadata and flat shading for mixed switching cells.
+- Added deterministic border-inclusive streamline generation, visual arc-length resampling, occupancy culling, independent `GL_LINES`, and fixed-pixel endpoint arrows.
+- Added targeted cache invalidation so live steps do not rebuild static scientific fields.
+
+## Verification
+
+- Clean MSVC scientific-core test build at `/W4 /WX /permissive-`: passed.
+- CTest: 1/1 target passed.
+- Visual Studio 2022 x64 Debug rebuild: passed.
+- Visual Studio 2022 x64 Release rebuild: passed.
+- Windows runtime/visual checks: Logit, Best Response, Replicator, Real Time movement/target behavior, Shift+click inspector, heat map, borders, streamlines, arrows, labels, and non-overlapping default layout passed.
+
+See `FEATURE_PLAN.md`, `SCIENTIFIC_VALIDATION.md`, and `WINDOWS_TEST_CHECKLIST.md` for durable requirements and repeatable acceptance criteria.

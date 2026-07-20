@@ -1,9 +1,10 @@
 Repository: https://github.com/PuntzGG/SimplexSimulations
-Branch: main
-Audited baseline commit: fff4da059bf10252f36cf41ab83489d65812de32 (short: fff4da0)
-Commit title: Improve equilibrium sweep visualization
-Commit date: 2026-07-10
+Branch at implementation start: main
+Planning baseline commit: e7805e12441b4db0c2af1b5f4fba91124a5c7c53
+Baseline date: 2026-07-16T00:23:21-03:00
 
-This package is an overlay/installer rather than a replacement Git history archive.
-It preserves files unrelated to the corrections and creates a timestamped backup
-before modifying the target working tree.
+The working product and Visual Studio solution are now named SimplexBeast.
+This file records the historical commit from which the feature implementation
+started. It is not an instruction to reset or overwrite the current worktree.
+
+The repository remote still uses its historical SimplexSimulations name.

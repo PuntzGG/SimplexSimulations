@@ -36,11 +36,10 @@ SimplexTrajectoryIntegrator::Integrate(
             return std::nullopt;
         }
 
-        const auto nextState = AdvanceWithSubdivision(
+        const auto nextState = AdvanceOneStep(
             dynamics,
             currentState,
-            stepSize,
-            kMaximumSubdivisionDepth
+            stepSize
         );
         if (!nextState.has_value()) {
             return std::nullopt;
@@ -52,6 +51,24 @@ SimplexTrajectoryIntegrator::Integrate(
     }
 
     return states;
+}
+
+std::optional<SimplexState> SimplexTrajectoryIntegrator::AdvanceOneStep(
+    const SimplexDynamicModel& dynamics,
+    const SimplexState& state,
+    double timeStep
+) const
+{
+    if (!state.IsValid() || !std::isfinite(timeStep) || timeStep <= 0.0) {
+        return std::nullopt;
+    }
+
+    return AdvanceWithSubdivision(
+        dynamics,
+        state,
+        timeStep,
+        kMaximumSubdivisionDepth
+    );
 }
 
 std::optional<SimplexDerivative>

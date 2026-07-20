@@ -17,6 +17,12 @@ public:
         const TrajectorySettings& settings
     ) const;
 
+    [[nodiscard]] std::optional<SimplexState> AdvanceOneStep(
+        const SimplexDynamicModel& dynamics,
+        const SimplexState& state,
+        double timeStep
+    ) const;
+
 private:
     [[nodiscard]] static std::optional<SimplexDerivative> EvaluateChecked(
         const SimplexDynamicModel& dynamics,

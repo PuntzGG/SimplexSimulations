@@ -1,11 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <vector>
 
-#include "LogitDynamics.h"
+#include "BestResponseDynamics.h"
+#include "DynamicsKind.h"
 #include "LogitEquilibriumSweep.h"
 #include "OpggParameters.h"
+#include "SimplexDynamicModel.h"
 #include "SimplexEquilibriumFinder.h"
 #include "SimplexState.h"
 #include "SimplexTrajectoryIntegrator.h"
@@ -19,12 +22,20 @@ public:
     [[nodiscard]] bool Initialize();
     [[nodiscard]] bool SetCurrentState(const SimplexState& state);
     [[nodiscard]] bool SetParameters(const OpggParameters& parameters);
+    [[nodiscard]] bool SetDynamicsKind(DynamicsKind kind);
+    [[nodiscard]] bool SetBestResponseSettings(
+        const BestResponseSettings& settings
+    );
     [[nodiscard]] bool SetTrajectorySettings(
         const TrajectorySettings& settings
     );
 
     [[nodiscard]] const SimplexState& CurrentState() const noexcept;
     [[nodiscard]] const OpggParameters& Parameters() const noexcept;
+    [[nodiscard]] DynamicsKind ActiveDynamicsKind() const noexcept;
+    [[nodiscard]] const DynamicsCapabilities& ActiveCapabilities() const noexcept;
+    [[nodiscard]] const BestResponseSettings& BestResponseOptions() const noexcept;
+    [[nodiscard]] const SimplexDynamicModel& ActiveDynamics() const noexcept;
     [[nodiscard]] const TrajectorySettings& Settings() const noexcept;
     [[nodiscard]] const std::vector<SimplexState>& Trajectory() const noexcept;
 
@@ -43,10 +54,14 @@ private:
 
     SimplexState currentState_;
     OpggParameters parameters_;
+    DynamicsKind dynamicsKind_ = DynamicsKind::Logit;
+    DynamicsCapabilities dynamicsCapabilities_ =
+        CapabilitiesFor(DynamicsKind::Logit);
+    BestResponseSettings bestResponseSettings_;
     TrajectorySettings trajectorySettings_;
     SimplexEquilibriumFinder equilibriumFinder_;
     LogitEquilibriumSweep equilibriumSweep_;
-    LogitDynamics dynamics_;
+    std::unique_ptr<SimplexDynamicModel> dynamics_;
     SimplexTrajectoryIntegrator trajectoryIntegrator_;
     std::vector<SimplexState> trajectory_;
 };

@@ -1,6 +1,7 @@
 #include "SimplexEquilibriumFinder.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -50,7 +51,7 @@ namespace
         );
     }
 
-    [[nodiscard]] std::optional<VectorFieldValue> EvaluateVectorField(
+    [[nodiscard]] std::optional<VectorFieldValue> EvaluateRootFunction(
         const SimplexDynamicModel& dynamics,
         const Coordinates& coordinates,
         const SimplexEquilibriumSearchSettings& settings
@@ -59,6 +60,31 @@ namespace
         const auto state = MakeInteriorState(coordinates, settings.interiorMargin);
         if (!state.has_value()) {
             return std::nullopt;
+        }
+
+        if (dynamics.Kind() == DynamicsKind::Replicator) {
+            // In the open simplex, Replicator rest points require equal
+            // payoffs. Solving x_i(pi_i - average) = 0 directly creates false
+            // roots arbitrarily close to a boundary because x_i is tiny.
+            // Payoff differences remove that degeneracy; invariant faces are
+            // handled separately by the explicit boundary search below.
+            const auto payoffs = dynamics.Payoffs(*state);
+            if (!payoffs.has_value() || !payoffs->IsFinite()) {
+                return std::nullopt;
+            }
+            const double xDifference =
+                payoffs->cooperators - payoffs->loners;
+            const double yDifference =
+                payoffs->defectors - payoffs->loners;
+            return VectorFieldValue{
+                xDifference,
+                yDifference,
+                std::max({
+                    std::abs(xDifference),
+                    std::abs(yDifference),
+                    std::abs(payoffs->cooperators - payoffs->defectors)
+                })
+            };
         }
 
         const auto derivative = dynamics.Evaluate(*state);
@@ -104,22 +130,22 @@ namespace
             return std::nullopt;
         }
 
-        const auto positiveX = EvaluateVectorField(
+        const auto positiveX = EvaluateRootFunction(
             dynamics,
             Coordinates{ coordinates.x + xStep, coordinates.y },
             settings
         );
-        const auto negativeX = EvaluateVectorField(
+        const auto negativeX = EvaluateRootFunction(
             dynamics,
             Coordinates{ coordinates.x - xStep, coordinates.y },
             settings
         );
-        const auto positiveY = EvaluateVectorField(
+        const auto positiveY = EvaluateRootFunction(
             dynamics,
             Coordinates{ coordinates.x, coordinates.y + yStep },
             settings
         );
-        const auto negativeY = EvaluateVectorField(
+        const auto negativeY = EvaluateRootFunction(
             dynamics,
             Coordinates{ coordinates.x, coordinates.y - yStep },
             settings
@@ -146,7 +172,7 @@ namespace
         const SimplexEquilibriumSearchSettings& settings
     )
     {
-        auto value = EvaluateVectorField(dynamics, coordinates, settings);
+        auto value = EvaluateRootFunction(dynamics, coordinates, settings);
         if (!value.has_value()) {
             return std::nullopt;
         }
@@ -176,6 +202,16 @@ namespace
                     std::abs(verification->dz)
                 });
                 if (verifiedResidual > settings.residualTolerance) {
+                    return std::nullopt;
+                }
+
+                const auto rootVerification = EvaluateRootFunction(
+                    dynamics,
+                    Coordinates{ state->X(), state->Y() },
+                    settings
+                );
+                if (!rootVerification.has_value()
+                    || rootVerification->residual > settings.residualTolerance) {
                     return std::nullopt;
                 }
 
@@ -221,7 +257,7 @@ namespace
                     coordinates.x + scale * stepX,
                     coordinates.y + scale * stepY
                 };
-                const auto candidateValue = EvaluateVectorField(
+                const auto candidateValue = EvaluateRootFunction(
                     dynamics,
                     candidate,
                     settings
@@ -263,6 +299,329 @@ namespace
         }
         return false;
     }
+
+    [[nodiscard]] SimplexEquilibriumLocation ClassifyLocation(
+        const SimplexState& state,
+        double tolerance
+    ) noexcept
+    {
+        const bool zeroX = state.X() <= tolerance;
+        const bool zeroY = state.Y() <= tolerance;
+        const bool zeroZ = state.Z() <= tolerance;
+
+        if (zeroY && zeroZ) {
+            return SimplexEquilibriumLocation::VertexX;
+        }
+        if (zeroX && zeroZ) {
+            return SimplexEquilibriumLocation::VertexY;
+        }
+        if (zeroX && zeroY) {
+            return SimplexEquilibriumLocation::VertexZ;
+        }
+        if (zeroZ) {
+            return SimplexEquilibriumLocation::EdgeXY;
+        }
+        if (zeroY) {
+            return SimplexEquilibriumLocation::EdgeXZ;
+        }
+        if (zeroX) {
+            return SimplexEquilibriumLocation::EdgeYZ;
+        }
+        return SimplexEquilibriumLocation::Interior;
+    }
+
+    [[nodiscard]] std::optional<SimplexEquilibrium> VerifyState(
+        const SimplexDynamicModel& dynamics,
+        const SimplexState& state,
+        const SimplexEquilibriumSearchSettings& settings,
+        bool isIsolated = true
+    )
+    {
+        const auto derivative = dynamics.Evaluate(state);
+        if (!derivative.has_value()
+            || !derivative->IsFinite()
+            || !derivative->IsTangent()) {
+            return std::nullopt;
+        }
+
+        const double residual = std::max({
+            std::abs(derivative->dx),
+            std::abs(derivative->dy),
+            std::abs(derivative->dz)
+        });
+        if (residual > settings.residualTolerance) {
+            return std::nullopt;
+        }
+
+        return SimplexEquilibrium{
+            state,
+            residual,
+            ClassifyLocation(state, settings.duplicateDistance),
+            isIsolated
+        };
+    }
+
+    void AddIfUnique(
+        const SimplexEquilibrium& candidate,
+        std::vector<SimplexEquilibrium>& equilibria,
+        double duplicateDistance
+    )
+    {
+        if (!IsDuplicate(candidate, equilibria, duplicateDistance)) {
+            equilibria.push_back(candidate);
+        }
+    }
+
+    [[nodiscard]] SimplexState MakeEdgeState(int edge, double parameter)
+    {
+        switch (edge) {
+        case 0:
+            return SimplexState::Normalized(parameter, 1.0 - parameter, 0.0);
+        case 1:
+            return SimplexState::Normalized(parameter, 0.0, 1.0 - parameter);
+        default:
+            return SimplexState::Normalized(0.0, parameter, 1.0 - parameter);
+        }
+    }
+
+    [[nodiscard]] std::optional<double> EvaluateEdgeComponent(
+        const SimplexDynamicModel& dynamics,
+        int edge,
+        double parameter
+    )
+    {
+        const auto derivative = dynamics.Evaluate(
+            MakeEdgeState(edge, parameter)
+        );
+        if (!derivative.has_value()
+            || !derivative->IsFinite()
+            || !derivative->IsTangent()) {
+            return std::nullopt;
+        }
+
+        return edge == 2 ? derivative->dy : derivative->dx;
+    }
+
+    [[nodiscard]] std::optional<double> BisectEdgeRoot(
+        const SimplexDynamicModel& dynamics,
+        int edge,
+        double left,
+        double right,
+        const SimplexEquilibriumSearchSettings& settings
+    )
+    {
+        auto leftValue = EvaluateEdgeComponent(dynamics, edge, left);
+        auto rightValue = EvaluateEdgeComponent(dynamics, edge, right);
+        if (!leftValue.has_value() || !rightValue.has_value()) {
+            return std::nullopt;
+        }
+
+        for (int iteration = 0; iteration < 80; ++iteration) {
+            const double midpoint = 0.5 * (left + right);
+            const auto middleValue = EvaluateEdgeComponent(
+                dynamics,
+                edge,
+                midpoint
+            );
+            if (!middleValue.has_value()) {
+                return std::nullopt;
+            }
+
+            if (std::abs(*middleValue) <= settings.residualTolerance
+                || right - left <= settings.duplicateDistance * 0.25) {
+                return midpoint;
+            }
+
+            if ((*leftValue < 0.0 && *middleValue > 0.0)
+                || (*leftValue > 0.0 && *middleValue < 0.0)) {
+                right = midpoint;
+                rightValue = middleValue;
+            }
+            else {
+                left = midpoint;
+                leftValue = middleValue;
+            }
+        }
+
+        return 0.5 * (left + right);
+    }
+
+    void AddReplicatorBoundaryEquilibria(
+        const SimplexDynamicModel& dynamics,
+        const SimplexEquilibriumSearchSettings& settings,
+        std::vector<SimplexEquilibrium>& equilibria
+    )
+    {
+        const std::array<SimplexState, 3> vertices{
+            SimplexState::Normalized(1.0, 0.0, 0.0),
+            SimplexState::Normalized(0.0, 1.0, 0.0),
+            SimplexState::Normalized(0.0, 0.0, 1.0)
+        };
+        for (const SimplexState& vertex : vertices) {
+            const auto equilibrium = VerifyState(dynamics, vertex, settings);
+            if (equilibrium.has_value()) {
+                AddIfUnique(
+                    *equilibrium,
+                    equilibria,
+                    settings.duplicateDistance
+                );
+            }
+        }
+
+        const int edgeResolution = std::max(64, settings.latticeResolution * 4);
+        for (int edge = 0; edge < 3; ++edge) {
+            bool edgeAppearsDegenerate = true;
+            std::vector<double> values;
+            values.reserve(static_cast<std::size_t>(edgeResolution - 1));
+            for (int index = 1; index < edgeResolution; ++index) {
+                const auto value = EvaluateEdgeComponent(
+                    dynamics,
+                    edge,
+                    static_cast<double>(index) / edgeResolution
+                );
+                if (!value.has_value()) {
+                    values.clear();
+                    break;
+                }
+                edgeAppearsDegenerate = edgeAppearsDegenerate
+                    && std::abs(*value) <= settings.residualTolerance;
+                values.push_back(*value);
+            }
+
+            if (values.empty()) {
+                continue;
+            }
+
+            if (edgeAppearsDegenerate) {
+                const auto representative = VerifyState(
+                    dynamics,
+                    MakeEdgeState(edge, 0.5),
+                    settings,
+                    false
+                );
+                if (representative.has_value()) {
+                    AddIfUnique(
+                        *representative,
+                        equilibria,
+                        settings.duplicateDistance
+                    );
+                }
+                continue;
+            }
+
+            if (std::abs(values.front()) <= settings.residualTolerance) {
+                const auto equilibrium = VerifyState(
+                    dynamics,
+                    MakeEdgeState(edge, 1.0 / edgeResolution),
+                    settings
+                );
+                if (equilibrium.has_value()) {
+                    AddIfUnique(
+                        *equilibrium,
+                        equilibria,
+                        settings.duplicateDistance
+                    );
+                }
+            }
+
+            for (int index = 2; index < edgeResolution; ++index) {
+                const double previousParameter =
+                    static_cast<double>(index - 1) / edgeResolution;
+                const double parameter =
+                    static_cast<double>(index) / edgeResolution;
+                const double previousValue = values[
+                    static_cast<std::size_t>(index - 2)
+                ];
+                const double value = values[
+                    static_cast<std::size_t>(index - 1)
+                ];
+                const bool crosses =
+                    (previousValue < 0.0 && value > 0.0)
+                    || (previousValue > 0.0 && value < 0.0);
+                const bool sampleIsRoot =
+                    std::abs(value) <= settings.residualTolerance;
+                if (crosses || sampleIsRoot) {
+                    const auto root = sampleIsRoot
+                        ? std::optional<double>{ parameter }
+                        : BisectEdgeRoot(
+                            dynamics,
+                            edge,
+                            previousParameter,
+                            parameter,
+                            settings
+                        );
+                    if (root.has_value()) {
+                        const auto equilibrium = VerifyState(
+                            dynamics,
+                            MakeEdgeState(edge, *root),
+                            settings
+                        );
+                        if (equilibrium.has_value()) {
+                            AddIfUnique(
+                                *equilibrium,
+                                equilibria,
+                                settings.duplicateDistance
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void AddBestResponseEquilibria(
+        const SimplexDynamicModel& dynamics,
+        const SimplexEquilibriumSearchSettings& settings,
+        std::vector<SimplexEquilibrium>& equilibria
+    )
+    {
+        // B(s) is uniform on a non-empty support. Therefore G(s)=B(s)-s can
+        // vanish only at one of these seven support-uniform states.
+        const std::array<SimplexState, 7> candidates{
+            SimplexState::Normalized(1.0, 0.0, 0.0),
+            SimplexState::Normalized(0.0, 1.0, 0.0),
+            SimplexState::Normalized(0.0, 0.0, 1.0),
+            SimplexState::Normalized(1.0, 1.0, 0.0),
+            SimplexState::Normalized(1.0, 0.0, 1.0),
+            SimplexState::Normalized(0.0, 1.0, 1.0),
+            SimplexState::Normalized(1.0, 1.0, 1.0)
+        };
+
+        for (const SimplexState& candidate : candidates) {
+            const auto equilibrium = VerifyState(dynamics, candidate, settings);
+            if (equilibrium.has_value()) {
+                AddIfUnique(
+                    *equilibrium,
+                    equilibria,
+                    settings.duplicateDistance
+                );
+            }
+        }
+    }
+}
+
+const char* SimplexEquilibriumLocationName(
+    SimplexEquilibriumLocation location
+) noexcept
+{
+    switch (location) {
+    case SimplexEquilibriumLocation::Interior:
+        return "Interior";
+    case SimplexEquilibriumLocation::EdgeXY:
+        return "Cooperator-Defector edge";
+    case SimplexEquilibriumLocation::EdgeXZ:
+        return "Cooperator-Loner edge";
+    case SimplexEquilibriumLocation::EdgeYZ:
+        return "Defector-Loner edge";
+    case SimplexEquilibriumLocation::VertexX:
+        return "Cooperator vertex";
+    case SimplexEquilibriumLocation::VertexY:
+        return "Defector vertex";
+    case SimplexEquilibriumLocation::VertexZ:
+        return "Loner vertex";
+    }
+
+    return "Unknown";
 }
 
 bool SimplexEquilibriumSearchSettings::IsComputable() const noexcept
@@ -293,7 +652,7 @@ SimplexEquilibriumFinder::Find(
         return std::nullopt;
     }
 
-    if (!EvaluateVectorField(
+    if (!EvaluateRootFunction(
             dynamics,
             Coordinates{ 1.0 / 3.0, 1.0 / 3.0 },
             settings
@@ -302,6 +661,11 @@ SimplexEquilibriumFinder::Find(
     }
 
     std::vector<SimplexEquilibrium> equilibria;
+
+    if (dynamics.Kind() == DynamicsKind::EqualSplitBestResponse) {
+        AddBestResponseEquilibria(dynamics, settings, equilibria);
+        return equilibria;
+    }
 
     const auto tryAdd = [&](const Coordinates& seed) {
         const auto equilibrium = RefineEquilibrium(dynamics, seed, settings);
@@ -334,6 +698,17 @@ SimplexEquilibriumFinder::Find(
     tryAdd(Coordinates{ 1.0 - 2.0 * nearEdge, nearEdge });
     tryAdd(Coordinates{ nearEdge, 1.0 - 2.0 * nearEdge });
     tryAdd(Coordinates{ nearEdge, nearEdge });
+
+    for (SimplexEquilibrium& equilibrium : equilibria) {
+        equilibrium.location = ClassifyLocation(
+            equilibrium.state,
+            settings.duplicateDistance
+        );
+    }
+
+    if (dynamics.Kind() == DynamicsKind::Replicator) {
+        AddReplicatorBoundaryEquilibria(dynamics, settings, equilibria);
+    }
 
     std::sort(
         equilibria.begin(),

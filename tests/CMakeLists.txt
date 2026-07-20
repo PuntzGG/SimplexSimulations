@@ -9,11 +9,20 @@ endif()
 
 add_executable(SimplexScientificCoreTests
     ScientificCoreTests.cpp
+    "${SIMPLEX_ROOT}/BestResponseDynamics.cpp"
+    "${SIMPLEX_ROOT}/DynamicsFactory.cpp"
+    "${SIMPLEX_ROOT}/EquilibriumInspector.cpp"
     "${SIMPLEX_ROOT}/LogitDynamics.cpp"
     "${SIMPLEX_ROOT}/LogitEquilibriumSweep.cpp"
+    "${SIMPLEX_ROOT}/OpggPayoffEvaluator.cpp"
+    "${SIMPLEX_ROOT}/RealTimeSimulationController.cpp"
+    "${SIMPLEX_ROOT}/ReplicatorDynamics.cpp"
     "${SIMPLEX_ROOT}/SimulationSession.cpp"
     "${SIMPLEX_ROOT}/SimplexEquilibriumFinder.cpp"
+    "${SIMPLEX_ROOT}/SimplexJacobianAnalyzer.cpp"
     "${SIMPLEX_ROOT}/SimplexTrajectoryIntegrator.cpp"
+    "${SIMPLEX_ROOT}/SpeedHeatMapGenerator.cpp"
+    "${SIMPLEX_ROOT}/StreamlineFieldGenerator.cpp"
 )
 
 target_include_directories(SimplexScientificCoreTests PRIVATE

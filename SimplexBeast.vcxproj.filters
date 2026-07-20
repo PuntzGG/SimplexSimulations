@@ -15,6 +15,24 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BestResponseDynamics.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DynamicsFactory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="EquilibriumInspector.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="OpggPayoffEvaluator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ReplicatorDynamics.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RealTimeSimulationController.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -28,6 +46,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SdlSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ScientificFieldVisualization.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SimplexBeastApplication.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClInclude Include="SdlOpenGlWindow.h">
@@ -69,7 +93,22 @@
     <ClCompile Include="SimulationSession.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="SpeedHeatMapGenerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SpeedHeatMapMesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="StreamlineFieldGenerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="StreamlineMesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="SimplexEquilibriumFinder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SimplexJacobianAnalyzer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="EquilibriumMesh.cpp">
@@ -83,7 +122,34 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BestResponseDynamics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DynamicsFactory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DynamicsKind.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EquilibriumInspector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="OpggPayoffEvaluator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ReplicatorDynamics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RealTimeSimulationController.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StrategyPayoffs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ShaderProgram.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SimplexBeastApplication.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SimplexMesh.h">
@@ -107,6 +173,9 @@
     <ClInclude Include="SdlSystem.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ScientificFieldVisualization.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="SimplexDerivative.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -122,6 +191,9 @@
     <ClInclude Include="SimplexDynamicModel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SimplexDisplayLayout.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="SimplexTrajectoryIntegrator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -134,7 +206,22 @@
     <ClInclude Include="SimulationSession.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SpeedHeatMapGenerator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SpeedHeatMapMesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StreamlineFieldGenerator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StreamlineMesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="SimplexEquilibriumFinder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SimplexJacobianAnalyzer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="EquilibriumMesh.h">

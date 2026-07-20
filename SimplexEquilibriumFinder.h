@@ -6,11 +6,29 @@
 #include "SimplexDynamicModel.h"
 #include "SimplexState.h"
 
+enum class SimplexEquilibriumLocation
+{
+    Interior,
+    EdgeXY,
+    EdgeXZ,
+    EdgeYZ,
+    VertexX,
+    VertexY,
+    VertexZ
+};
+
 struct SimplexEquilibrium final
 {
     SimplexState state;
     double residual = 0.0;
+    SimplexEquilibriumLocation location =
+        SimplexEquilibriumLocation::Interior;
+    bool isIsolated = true;
 };
+
+[[nodiscard]] const char* SimplexEquilibriumLocationName(
+    SimplexEquilibriumLocation location
+) noexcept;
 
 struct SimplexEquilibriumSearchSettings final
 {
@@ -26,8 +44,9 @@ struct SimplexEquilibriumSearchSettings final
     [[nodiscard]] bool IsComputable() const noexcept;
 };
 
-// Finds verified interior rest points. Boundary equilibria require a separate
-// face-by-face search and are intentionally not reported by this class.
+// Finds residual-verified rest points using model-aware interior, edge, and
+// vertex searches. Logit remains interior-only; Replicator includes invariant
+// faces; equal-split Best Response checks its finite set of admissible targets.
 class SimplexEquilibriumFinder final
 {
 public:

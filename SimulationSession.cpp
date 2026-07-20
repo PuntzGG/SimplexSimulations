@@ -2,17 +2,25 @@
 
 #include <utility>
 
+#include "DynamicsFactory.h"
+
 SimulationSession::SimulationSession()
     : currentState_(SimplexState::Normalized(1.0, 1.0, 1.0)),
       parameters_(),
       trajectorySettings_(),
-      dynamics_(parameters_)
+      dynamics_(CreateDynamics(
+          dynamicsKind_,
+          parameters_,
+          bestResponseSettings_
+      ))
 {
 }
 
 bool SimulationSession::Initialize()
 {
-    if (!parameters_.IsComputable() || !trajectorySettings_.IsComputable()) {
+    if (!parameters_.IsComputable()
+        || !trajectorySettings_.IsComputable()
+        || dynamics_ == nullptr) {
         return false;
     }
     return RebuildTrajectory();
@@ -25,7 +33,7 @@ bool SimulationSession::SetCurrentState(const SimplexState& state)
     }
 
     auto candidateTrajectory = trajectoryIntegrator_.Integrate(
-        dynamics_,
+        *dynamics_,
         state,
         trajectorySettings_
     );
@@ -44,9 +52,17 @@ bool SimulationSession::SetParameters(const OpggParameters& parameters)
         return false;
     }
 
-    LogitDynamics candidateDynamics(parameters);
+    auto candidateDynamics = CreateDynamics(
+        dynamicsKind_,
+        parameters,
+        bestResponseSettings_
+    );
+    if (candidateDynamics == nullptr) {
+        return false;
+    }
+
     auto candidateTrajectory = trajectoryIntegrator_.Integrate(
-        candidateDynamics,
+        *candidateDynamics,
         currentState_,
         trajectorySettings_
     );
@@ -55,6 +71,69 @@ bool SimulationSession::SetParameters(const OpggParameters& parameters)
     }
 
     parameters_ = parameters;
+    dynamics_ = std::move(candidateDynamics);
+    trajectory_ = std::move(*candidateTrajectory);
+    return true;
+}
+
+bool SimulationSession::SetDynamicsKind(DynamicsKind kind)
+{
+    if (kind == DynamicsKind::Custom || kind == dynamicsKind_) {
+        return kind == dynamicsKind_;
+    }
+
+    auto candidateDynamics = CreateDynamics(
+        kind,
+        parameters_,
+        bestResponseSettings_
+    );
+    if (candidateDynamics == nullptr) {
+        return false;
+    }
+
+    auto candidateTrajectory = trajectoryIntegrator_.Integrate(
+        *candidateDynamics,
+        currentState_,
+        trajectorySettings_
+    );
+    if (!candidateTrajectory.has_value()) {
+        return false;
+    }
+
+    dynamicsKind_ = kind;
+    dynamicsCapabilities_ = CapabilitiesFor(kind);
+    dynamics_ = std::move(candidateDynamics);
+    trajectory_ = std::move(*candidateTrajectory);
+    return true;
+}
+
+bool SimulationSession::SetBestResponseSettings(
+    const BestResponseSettings& settings
+)
+{
+    if (!settings.IsComputable()) {
+        return false;
+    }
+
+    auto candidateDynamics = CreateDynamics(
+        dynamicsKind_,
+        parameters_,
+        settings
+    );
+    if (candidateDynamics == nullptr) {
+        return false;
+    }
+
+    auto candidateTrajectory = trajectoryIntegrator_.Integrate(
+        *candidateDynamics,
+        currentState_,
+        trajectorySettings_
+    );
+    if (!candidateTrajectory.has_value()) {
+        return false;
+    }
+
+    bestResponseSettings_ = settings;
     dynamics_ = std::move(candidateDynamics);
     trajectory_ = std::move(*candidateTrajectory);
     return true;
@@ -69,7 +148,7 @@ bool SimulationSession::SetTrajectorySettings(
     }
 
     auto candidateTrajectory = trajectoryIntegrator_.Integrate(
-        dynamics_,
+        *dynamics_,
         currentState_,
         settings
     );
@@ -92,6 +171,29 @@ const OpggParameters& SimulationSession::Parameters() const noexcept
     return parameters_;
 }
 
+DynamicsKind SimulationSession::ActiveDynamicsKind() const noexcept
+{
+    return dynamicsKind_;
+}
+
+const DynamicsCapabilities&
+SimulationSession::ActiveCapabilities() const noexcept
+{
+    return dynamicsCapabilities_;
+}
+
+const BestResponseSettings&
+SimulationSession::BestResponseOptions() const noexcept
+{
+    return bestResponseSettings_;
+}
+
+const SimplexDynamicModel&
+SimulationSession::ActiveDynamics() const noexcept
+{
+    return *dynamics_;
+}
+
 const TrajectorySettings& SimulationSession::Settings() const noexcept
 {
     return trajectorySettings_;
@@ -108,7 +210,7 @@ SimulationSession::FindEquilibria(
     const SimplexEquilibriumSearchSettings& settings
 ) const
 {
-    return equilibriumFinder_.Find(dynamics_, settings);
+    return equilibriumFinder_.Find(*dynamics_, settings);
 }
 
 std::optional<LogitEquilibriumSweepResult>
@@ -116,13 +218,17 @@ SimulationSession::GenerateEquilibriumSweep(
     const LogitEquilibriumSweepSettings& settings
 ) const
 {
+    if (dynamicsKind_ != DynamicsKind::Logit) {
+        return std::nullopt;
+    }
+
     return equilibriumSweep_.Generate(parameters_, settings);
 }
 
 bool SimulationSession::RebuildTrajectory()
 {
     auto candidateTrajectory = trajectoryIntegrator_.Integrate(
-        dynamics_,
+        *dynamics_,
         currentState_,
         trajectorySettings_
     );

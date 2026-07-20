@@ -3,6 +3,8 @@
 #include <array>
 #include <cstddef>
 
+#include "SimplexDisplayLayout.h"
+
 namespace
 {
 	struct Vertex
@@ -15,9 +17,12 @@ namespace
 	};
 
 	constexpr std::array<Vertex, 3> kSimplexVertices = {{
-		{  0.0f,   0.75f,  0.5f, 0.5f, 0.5f },
-		{ -0.75f, -0.55f,  0.5f, 0.5f, 0.5f },
-		{  0.75f, -0.55f,  0.5f, 0.5f, 0.5f }
+		{ SimplexDisplayLayout::kCooperatorsVertex.x,
+		  SimplexDisplayLayout::kCooperatorsVertex.y, 0.5f, 0.5f, 0.5f },
+		{ SimplexDisplayLayout::kLonersVertex.x,
+		  SimplexDisplayLayout::kLonersVertex.y, 0.5f, 0.5f, 0.5f },
+		{ SimplexDisplayLayout::kDefectorsVertex.x,
+		  SimplexDisplayLayout::kDefectorsVertex.y, 0.5f, 0.5f, 0.5f }
 	}};
 }
 

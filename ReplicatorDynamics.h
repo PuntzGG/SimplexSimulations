@@ -4,14 +4,12 @@
 
 #include "OpggParameters.h"
 #include "OpggPayoffEvaluator.h"
-#include "SimplexDerivative.h"
 #include "SimplexDynamicModel.h"
-#include "SimplexState.h"
 
-class LogitDynamics final : public SimplexDynamicModel
+class ReplicatorDynamics final : public SimplexDynamicModel
 {
 public:
-    explicit LogitDynamics(OpggParameters parameters = {});
+    explicit ReplicatorDynamics(OpggParameters parameters = {});
 
     [[nodiscard]] std::optional<SimplexDerivative> Evaluate(
         const SimplexState& state
@@ -23,11 +21,6 @@ public:
         const SimplexState& state
     ) const override;
 
-    [[nodiscard]] std::optional<SimplexState> ResponseTarget(
-        const SimplexState& state
-    ) const override;
-
 private:
-    OpggParameters parameters_;
     OpggPayoffEvaluator payoffEvaluator_;
 };
